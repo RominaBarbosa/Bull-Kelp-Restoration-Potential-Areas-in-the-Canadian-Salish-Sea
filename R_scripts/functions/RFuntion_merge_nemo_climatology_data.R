@@ -62,3 +62,71 @@ merge_nemo_climatology_data <- function(depth = "surface", time_period = "blob",
 
 
 
+#===============================================================================
+merge_nemo_climatology_data <- function(depth = "surface", 
+                                        time_period = "blob", 
+                                        variable = "ammonium", 
+                                        metric = "mean",
+                                        input_path = "D:/PSF/modeled_variables_original/seasonal_metrics_0.5m_depth", 
+                                        season = "winter",
+                                        grid_template) {
+  require(dplyr)
+  
+  # Years by time period
+  if (time_period == "blob") {
+    years <- c("2014", "2015", "2016", "2017", "2018", "2019")
+  } else if (time_period == "post_blob") {
+    years <- c("2020", "2021", "2022", "2023")
+  } else {
+    stop("Invalid time period; Choose 'blob' or 'post_blob'")
+  }
+  
+  # Copy the template so we keep all cells
+  merged_data <- grid_template
+  
+  # Loop through years and join each seasonal CSV
+  for (year in years) {
+    file_name <- file.path(input_path, paste(variable, year, season, metric, depth, ".csv", sep = "_"))
+    data <- read.csv(file_name)
+    
+    # Remove first column if it's just row numbers
+    if (ncol(data) == 4) {
+      data <- data[, -1]
+    }
+    
+    data$latitude <- as.numeric(as.character(data$latitude))
+    data$longitude <- as.numeric(as.character(data$longitude))
+    colnames(data) <- c("latitude", "longitude", paste0("value_", year))
+    
+    # Join by lat/long
+    merged_data <- left_join(merged_data, data, by = c("latitude", "longitude"))
+  }
+  
+  # Compute climatology mean across all selected years
+  value_cols <- grep("^value_", names(merged_data))
+  merged_data$climatology_ave <- rowMeans(merged_data[, value_cols], na.rm = TRUE)
+  
+  # Optional: sort by grid order
+  merged_data <- merged_data %>%
+    arrange(gridY, gridX)
+  
+  return(merged_data)
+}
+
+
+# How to use the function:
+# # grid_template must have:
+# # gridX, gridY, latitude, longitude for ALL cells
+# grid_template <- read.csv("bathy_template.csv") %>%
+#   mutate(gridX = as.integer(gridX), gridY = as.integer(gridY))
+# 
+# 
+# climatology <- merge_nemo_climatology_data(
+#   depth = "surface",
+#   time_period = "blob",
+#   variable = "ammonium",
+#   metric = "mean",
+#   input_path = "D:/PSF/modeled_variables_original/seasonal_metrics_0.5m_depth",
+#   season = "winter",
+#   grid_template = grid_template
+# )

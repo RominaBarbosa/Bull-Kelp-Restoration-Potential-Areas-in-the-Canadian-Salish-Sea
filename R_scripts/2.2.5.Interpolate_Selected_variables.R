@@ -6,83 +6,173 @@
 ### output data: rasters of variables  (metrics)                ################
 ### Author: Romina Barbosa                                      ################
 ### Date: 21-July-2025                                          ################
-### Last edition: 22-July-2025   
+### Last edition: 11-Aug-2025   
 ###=============================================================================
+# 11-Aug-2025 : updated selected variables 
+
 library(sf)
 library(terra)
 library(dplyr)
 
 
 
-Selected_variables_names<- read.csv( "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_WOut_bathymetricVars_FINAL.csv")
-Selected_variables_names<- colnames(Selected_variables_names)[4:ncol(Selected_variables_names)]
-# "ammonium_fall_mean"              "ammonium_spring_SD"              "ammonium_summer_mean"           
-# [4] "PAR_summer_mean"                 "salinity_fall_SD"                "salinity_summer_mean"           
-# [7] "salinity_summer_SD"              "temperature_summer_mean"         "turbidity_summer_mean"          
-# [10] "uVelocity_summer_maximum"        "uVelocity_summer_mean"           "uVelocity_summer_minimum"       
-# [13] "vVelocity_summer_maximum"        "vVelocity_summer_mean"           "vVelocity_summer_minimum"       
-# [16] "ammonium_spring_mean.y"          "summer_hours_above_threshold_18"
+selected_variables<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_nemo_masked.csv")
+colnames(selected_variables)
+# [1] "latitude"                        "longitude"                       
+# "ammonium_spring_mean"           
+# [4] "ammonium_spring_SD"              "ammonium_summer_mean"            "ammonium_summer_SD"             
+# [7] "ammonium_winter_mean"            "currentDirection_spring_min"     "currentDirection_summer_modal"  
+# [10] "currentSpeed_summer_mean"        "nitrate_summer_mean"             "PAR_summer_maximum"             
+# [13] "PAR_summer_mean"                 "salinity_summer_mean"            "salinity_summer_SD"             
+# [16] "temperature_summer_mean"         "turbidity_summer_mean"           "summer_cumulated_degrees_18"    
+# [19] "summer_hours_above_threshold_18"
 
-# Add ".csv" to each
-# desired_filenames <- paste0(Selected_variables_names, ".csv")
+selected_variables<- colnames(selected_variables)
+selected_variables<- selected_variables[3:length(selected_variables)]
 
-
-## SET PATCH AND UPLOAD FILES of env variables
-### Upload variables from the SalishSeaCast model and merge ====================
-my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics")
+# Upload variables from the SalishSeaCast model and merge 
+my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_")
 setwd(my_path)
 dir()
+files <- list.files(my_path, pattern = "\\.csv$", full.names = TRUE)
+length(files)# 160
 
-# List all CSVs in your folder
-files <- list.files(path = my_path, pattern = "\\.csv$", full.names = TRUE)
 
-
-# Load file 1 to start building the merged dataset
-df_all=read.csv(files[1])
-head(df_all)
-df_all<- df_all[,c(2:4)]
-filename <- strsplit(tools::file_path_sans_ext(files[1]), "/")[[1]][7]
-filename <- strsplit(filename, "_")[[1]][c(1,3,4)]
-filename <- paste0(filename, collapse ="_")
-colnames(df_all)[3]<- filename
-
-# Merge all files by adding a column of the metric to the df_all dataset
-for (i in 2:length(files)) {
+# Helper function to extract variable name from filename
+extract_var_name <- function(file_path, index) {
+  filename <- basename(tools::file_path_sans_ext(file_path))
+  parts <- unlist(strsplit(filename, "_"))
   
-  df= read.csv(files[i])
-  df= df[,c(2:4)]
-  
-  if(i %in% c(1:16, 33:76, 93:140)){
-    filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
-    filename <- strsplit(filename, "_")[[1]][c(1,3,4)]
-    filename <- paste0(filename, collapse ="_")
+  # Your previous logic for variable naming by index ranges:
+  if (index %in% c(1:16, 65:128, 145:160)) {
+    var_name <- paste(parts[c(1, 3, 4)], collapse = "_")
+  } else if (index %in% c(17:32)) {
+    var_name <- paste("currentDirection", paste(parts[4:5], collapse = "_"), sep = "_")
+  } else if (index %in% c(33:48)) {
+    var_name <- paste("currentSpeed", paste(parts[4:5], collapse = "_"), sep = "_")
+  } else if (index %in% c(49:64)) {
+    var_name <- paste("DIC", paste(parts[5:6], collapse = "_"), sep = "_")
+  } else if (index %in% c(129:144)) {
+    var_name <- paste("alkalinity", paste(parts[4:5], collapse = "_"), sep = "_")
+  } else {
+    var_name <- NA_character_
   }
   
-  if(i %in% c(17:32)){
-    filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
-    filename <- strsplit(filename, "_")[[1]][c(5:6)]
-    filename <- paste("DIC", paste0(filename, collapse ="_"), sep="_")
-  }
-  
-  if(i %in% c(77:92)){
-    filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
-    filename <- strsplit(filename, "_")[[1]][c(4:5)]
-    filename <- paste("alkalinity", paste0(filename, collapse ="_"), sep="_")
-  }
-  
-  colnames(df)[3]<- filename
-  df_all= merge(df_all, df, by=c("latitude" , "longitude"))
-  
+  return(var_name)
 }
 
-SSCast_variables<- df_all
+# Initialize merged data with the first file that matches selected variables
+df_all <- NULL
+first_file_found <- FALSE
+
+for (i in seq_along(files)) {
+  var_name <- extract_var_name(files[i], i)
+  
+  # Only process if variable is in selected_variables
+  if (!is.na(var_name) && var_name %in% selected_variables) {
+    df <- read.csv(files[i])
+    df <- df[, c(2:6, ncol(df))]  # Keep relevant columns
+    
+    colnames(df)[ncol(df)] <- var_name
+    
+    if (!first_file_found) {
+      df_all <- df
+      first_file_found <- TRUE
+    } else {
+      # Merge by spatial coordinates & bathymetry
+      df_all <- merge(df_all, df, by = c("gridY", "gridX", "bathymetry", "latitude", "longitude"))
+    }
+  }
+}
+
+# df_all now contains only selected variables merged, aligned by spatial coords
+head(df_all)
+
+# # Load file 1 to start building the merged dataset
+# df_all=read.csv(files[1])
+# head(df_all)
+# df_all<- df_all[,c(2:6,ncol(df_all))]
+# filename <- strsplit(tools::file_path_sans_ext(files[1]), "/")[[1]][7]
+# filename <- strsplit(filename, "_")[[1]][c(1,3,4)]
+# filename <- paste0(filename, collapse ="_")
+# colnames(df_all)[ncol(df_all)]<- filename
+# 
+# # Merge all files by adding a column of the metric to the df_all dataset
+# for (i in 117:160) {
+#   
+#   df= read.csv(files[i])
+#   df= df[,c(2:6,ncol(df))]
+#   
+#   if(i %in% c(1:16, 65:128, 145:160)){
+#     filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
+#     filename <- strsplit(filename, "_")[[1]][c(1,3,4)]
+#     filename <- paste0(filename, collapse ="_")
+#   }
+#   
+#   if(i %in% c(17:32)){
+#     filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
+#     filename <- strsplit(filename, "_")[[1]][c(4:5)]
+#     filename <- paste("currentDirection", paste0(filename, collapse ="_"), sep="_")
+#   }
+#   
+#   if(i %in% c(33:48)){
+#     filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
+#     filename <- strsplit(filename, "_")[[1]][c(4:5)]
+#     filename <- paste("currentSpeed", paste0(filename, collapse ="_"), sep="_")
+#   }
+#   
+#   if(i %in% c(49:64)){
+#     filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
+#     filename <- strsplit(filename, "_")[[1]][c(5:6)]
+#     filename <- paste("DIC", paste0(filename, collapse ="_"), sep="_")
+#   }
+#   
+#   if(i %in% c(129:144)){
+#     filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
+#     filename <- strsplit(filename, "_")[[1]][c(4:5)]
+#     filename <- paste("alkalinity", paste0(filename, collapse ="_"), sep="_")
+#   }
+# 
+#   colnames(df)[ncol(df)]<- filename
+#   df_all= merge(df_all, df, by=c("gridY", "gridX", "bathymetry", "latitude" , "longitude"))
+#   
+# }
+# 
+# selected_variables_df<- df_all[,which(colnames(df_all) %in% colnames(selected_variables))]
+# colnames(selected_variables_df)
+# rm(df_all)
 
 
+## Add temperature variables 
+my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_temp_tolerance_metrics_")
+files <- list.files(path = my_path, pattern = "\\.csv$", full.names = TRUE) # 32 files
 
-# Filter the files to include only those in desired_filenames
-Selected_variables_names<- c( "latitude", "longitude", Selected_variables_names)
-selected_variables<- SSCast_variables[, (names(SSCast_variables) %in% Selected_variables_names)]
-head(selected_variables, 2)
+df_variable= read.csv(files[24])
+df_variable<- df_variable[,c(2:4)]
+filename <- strsplit(tools::file_path_sans_ext(files[24]), "/")[[1]][7]
+filename <- strsplit(filename, "_")[[1]][c(3:6)]
+filename <- paste0(filename, collapse ="_")
+colnames(df_variable)[3]<- filename
+
+selected_variables_df= merge(selected_variables_df, df_variable, by=c("latitude" , "longitude"))
+
+df_variable= read.csv(files[32])
+df_variable<- df_variable[,c(2:4)]
+filename <- strsplit(tools::file_path_sans_ext(files[32]), "/")[[1]][7]
+filename <- strsplit(filename, "_")[[1]][c(3:7)]
+filename <- paste0(filename, collapse ="_")
+colnames(df_variable)[3]<- filename
+
+selected_variables_df= merge(selected_variables_df, df_variable, by=c("latitude" , "longitude"))
+colnames(selected_variables_df)
+# [1] "latitude"                        "longitude"                       
+# "ammonium_spring_mean"           
+# [4] "ammonium_spring_SD"              "ammonium_summer_mean"            "ammonium_summer_SD"             
+# [7] "ammonium_winter_mean"            "currentDirection_spring_min"     "currentDirection_summer_modal"  
+# [10] "currentSpeed_summer_mean"        "nitrate_summer_mean"             "PAR_summer_maximum"             
+# [13] "PAR_summer_mean"                 "salinity_summer_mean"            "salinity_summer_SD"             
+# [16] "temperature_summer_mean"         "turbidity_summer_mean"           "summer_cumulated_degrees_18"    
+# [19] "summer_hours_above_threshold_18"
 
 
 ###++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###
@@ -90,7 +180,7 @@ head(selected_variables, 2)
 
 
 
-
+library(ncdf4)
 
 ####============================================================================
 ### INTERPOLATION of Variables 
@@ -103,7 +193,7 @@ library(terra)
 
 # Load input data
 bathy <- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/bathy_coastwide_500m.tif")
-output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers"
+output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interpolated"
 variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations.csv")
 
 # variables_interoplation_function<- function(bathy= bathy, variables_data= variables_df, output_path= output_path){
@@ -138,7 +228,7 @@ variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/select
     
     # 6. Plot or save
     plot(idw_raster, main= paste("interpolation:", variable_name))
-    writeRaster(idw_raster[[1]], paste(output_path, paste(variable_name , "interpolated_output.tif", sep="_"), sep="/"), overwrite = TRUE)
+    terra::writeRaster(idw_raster[[1]], paste(output_path, paste(variable_name , "interpolated_output.tif", sep="_"), sep="/"), overwrite = TRUE)
     
   }  
 # }
