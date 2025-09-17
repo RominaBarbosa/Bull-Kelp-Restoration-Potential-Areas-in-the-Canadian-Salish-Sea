@@ -265,6 +265,26 @@ mapview(bathy_filtered)
 library(corrplot)
 length(SSCast_variables[which(is.na(SSCast_variables)),])
 SSCast_variables<- na.exclude(SSCast_variables)
+names(SSCast_variables)
+vars_to_remove<- c( "ammonium_spring_SD", "ammonium_winter_SD", "ammonium_fall_SD", "ammonium_summer_SD", 
+                    "nitrate_spring_SD", "nitrate_winter_SD", "nitrate_fall_SD", "nitrate_summer_SD", 
+                    "nitrate_spring_SD", "nitrate_winter_SD", 
+                    "turbidity_spring_SD", "turbidity_winter_SD", "turbidity_fall_SD","turbidity_summer_SD",
+                    "PAR_spring_SD", "PAR_winter_SD", "PAR_fall_SD", "PAR_summer_SD", 
+                    "DIC_spring_SD", "DIC_summer_SD", "DIC_fall_SD", "DIC_winter_SD",
+                    "temperature_spring_SD", "temperature_summer_SD", "temperature_fall_SD", "temperature_winter_SD",
+                    "alkalinity_spring_SD", "alkalinity_summer_SD", "alkalinity_fall_SD", "alkalinity_winter_SD",
+                    "salinity_spring_SD", "salinity_summer_SD", "salinity_fall_SD", "salinity_winter_SD",
+                    "currentDirection_spring_modal", "currentDirection_summer_min",   "currentSpeed_fall_modal",
+                    "currentDirection_fall_max" ,    "currentDirection_fall_mean"   ,
+                    "currentDirection_fall_min",     "currentDirection_fall_modal" ,  "currentDirection_spring_max" ,  "currentDirection_spring_mean" ,
+                     "currentDirection_spring_min",   "currentDirection_summer_max" ,  "currentDirection_summer_mean",  "currentDirection_summer_modal",
+                    "currentDirection_winter_max",   "currentDirection_winter_mean" , "currentDirection_winter_min" ,  "currentDirection_winter_modal",
+                    "currentSpeed_summer_modal", "currentSpeed_spring_modal", "currentSpeed_winter_modal"
+                    ) 
+tokeep <- setdiff(colnames(SSCast_variables), vars_to_remove)
+SSCast_variables <- SSCast_variables[, tokeep]
+
 
 cor_matrix<- cor(SSCast_variables[, c(3:ncol(SSCast_variables))])
 
@@ -283,6 +303,7 @@ keep_vars <- apply(abs_cor, 2, function(x) all(x < 0.7))
 library(caret)
 # cor_matrix.a is your correlation matrix
 vars_to_remove <- findCorrelation(cor_matrix, cutoff = 0.7, names = TRUE)
+
 
 # Subset the original dataframe, keeping only the good ones
 # vars_to_remove <- remove_highly_correlated(cor_matrix, cutoff = 0.7)
@@ -320,6 +341,11 @@ colnames(nonCorr_variables)
 # [13] "nitrate_winter_SD"             "PAR_winter_SD"                 "turbidity_winter_minimum"      "depth_m"  
 
 
+# 4 September 2025 --> removed SD metrics (Low Salinity SD was being identified as limiting factor in the Juan de Fuca Strait and norhtern of Salish Sea, but this does not make sense)
+# 1] "longitude"                "latitude"                 "ammonium_fall_minimum"    "ammonium_spring_minimum"  "currentSpeed_fall_max"   
+# [6] "nitrate_spring_maximum"   "PAR_fall_maximum"         "turbidity_winter_minimum" "depth_m"  
+
+
 cor_matrix.a<- cor(nonCorr_variables)
 corrplot::corrplot(cor_matrix.a, type = 'lower', tl.col = 'black',#order = 'hclust',
                    cl.ratio = 0.15, tl.srt = 45, col = COL2('PuOr', 30), cl.cex = 0.8,  tl.cex = 0.6,
@@ -353,19 +379,24 @@ colnames(nonCorr_variables)
 # [9] "nitrate_summer_SD"             "nitrate_winter_maximum"        "nitrate_winter_SD"             "PAR_winter_SD"                
 # [13] "turbidity_winter_minimum" 
 
+# 4 Sep 2025
+# [1] "ammonium_fall_minimum"    "ammonium_spring_minimum"  "currentSpeed_fall_max"    "nitrate_spring_maximum"   "PAR_fall_maximum"        
+# [6] "turbidity_winter_minimum"
+
 nonCorr_variables<- cbind(SSCast_variables[,1:2], nonCorr_variables)
 
 
 ### Select one variable from each group of correlated variables ================
 corr_variables <- setdiff(colnames(SSCast_variables), c(colnames(nonCorr_variables), "depth_m"))#"latitude", "longitude", 
+# corr_variables<- corr_variables[c(1:13,28:length(corr_variables))]
 Corr_variables <- SSCast_variables[, corr_variables]
-colnames(Corr_variables) #143
+colnames(Corr_variables) #143 # 129 after removing current direction variables # 101 after removing SD metrics of all variables
 
 cor_nemo<- cor_plot_function(data= Corr_variables, 
                                     path_plot= "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots",
-                                    plot_name= "correlated_salishseacast_vars_1_v2",
+                                    plot_name= "correlated_salishseacast_variables",
                              plot_type = "pdf",
-                             pdf_height= 17, 
+                             pdf_height= 25, 
                              pdf_width= 43)
 
 
@@ -391,45 +422,41 @@ dev.off()
 
 
 ### Select one variable per group of correlated variables ======================
-variables<- c(
-              "nitrate_summer_mean",
-              "salinity_summer_mean",
-              "currentSpeed_summer_mean",
-              "currentDirection_spring_min",
-              "currentDirection_summer_modal",
-              "salinity_summer_SD",
-              "ammonium_winter_mean",
-              "ammonium_spring_SD",
-              "ammonium_summer_SD",
-              "temperature_summer_mean",
-              "PAR_summer_mean",
-              "PAR_summer_maximum",
-              "ammonium_spring_mean",
-              "turbidity_summer_mean",
-              "ammonium_summer_mean"
-              # "ammonium_spring_maximum",
-              # "ammonium_fall_mean",
-              # "PAR_spring_maximum",
-              # # "direction_spring_mean",
-              # "speedVector_summer_maximum"
-)
-
-# variables<- c("ammonium_spring_maximum",
+# variables<- c(
+#               "nitrate_summer_minimum",
+#               "nitrate_winter_minimum", # correlated with   "salinity_summer_minimum",
+#               "currentSpeed_summer_mean",
+#               # "currentDirection_spring_min",
+#               # "currentDirection_summer_modal",
+#               "salinity_summer_SD", # correlated with DIC_spring_SD
+#               "ammonium_winter_minimum",
+#               "ammonium_spring_SD",
+#               "ammonium_summer_SD",
 #               "temperature_summer_mean",
-#               "salinity_summer_SD",
-#               "ammonium_fall_mean",
-#               "PAR_spring_maximum",
-#               "PAR_summer_mean",
-#               "turbidity_summer_mean",
-#               "ammonium_summer_mean",
-#               "direction_summer_SD",
-#               # "direction_spring_mean",
-#               "speedVector_summer_mean",
-#               "speedVector_summer_maximum",
-#               "nitrate_summer_mean",
-#               "salinity_summer_mean"
+#               "PAR_summer_mean",# "", # correlated with "PAR_spring_mean",
+#               "PAR_summer_maximum", 
+#               "ammonium_spring_mean", 
+#               "turbidity_summer_mean",# corr with turbidity_spring_mean
+#               "ammonium_summer_minimum" # corr with ammonium_summer_mean and maximum
+#               # "ammonium_spring_maximum",
+#               # "ammonium_fall_mean",
+#               # "PAR_spring_maximum",
+#               # # "direction_spring_mean",
+#               # "speedVector_summer_maximum"
 # )
 
+variables<- c(
+  "currentSpeed_summer_mean",
+  "nitrate_summer_minimum",
+  "nitrate_winter_mean", # correlated with   "salinity_summer_minimum", and nitrate winter mean
+  "temperature_summer_mean",
+  "ammonium_spring_mean", 
+  "PAR_summer_mean",# "", # correlated with "PAR_spring_mean",
+  "ammonium_spring_mean",
+  "ammonium_winter_mean",
+  "PAR_summer_maximum", 
+  "turbidity_summer_mean",# corr with turbidity_spring_mean
+  "ammonium_summer_minimum" )# corr with ammonium_summer_mean and maximum
 
 
 Corr_variables_selected<- Corr_variables[, (names(Corr_variables) %in% variables)]
@@ -439,7 +466,7 @@ setdiff(variables, names(Corr_variables_selected)) # check for any missing varia
 
 Corr_variables_selected<- cbind(Corr_variables_selected, SSCast_variables[,1:2])
 
-# write_csv(Corr_variables_selected, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_v2.csv")
+# write_csv(Corr_variables_selected, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_v4.csv")
 
 
 ### ============================================================================
@@ -455,7 +482,7 @@ files <- list.files(path = my_path, pattern = "\\.csv$", full.names = TRUE) # 32
 # Load file 1 to start building the merged dataset
 df_all=read.csv(files[1])
 head(df_all)
-df_all<- df_all[,c(2:4)]
+df_all<- df_all[,c(5:6,ncol(df))]
 filename <- strsplit(tools::file_path_sans_ext(files[1]), "/")[[1]][7]
 filename <- strsplit(filename, "_")[[1]][c(3:6)]
 filename <- paste0(filename, collapse ="_")
@@ -465,7 +492,7 @@ colnames(df_all)[3]<- filename
 for (i in 2:length(files)) {
   
   df= read.csv(files[i])
-  df= df[,c(2:4)]
+  df= df[,c(5:6,ncol(df))]
   
   filename <- strsplit(tools::file_path_sans_ext(files[i]), "/")[[1]][7]
   
@@ -551,31 +578,34 @@ files <- list.files(path = my_path_bathy, pattern = "\\.tif$", full.names = TRUE
 files<- files[-1]
 
 rasters_bathy<- stack(paste(files[1], sep="/"))
-crs(rasters_bathy)<- crs(bathy_filtered)
+bc_albers <- CRS("+proj=aea +lat_1=50 +lat_2=58.5 +lat_0=45 +lon_0=-126 +x_0=1000000 +y_0=0 +datum=NAD83 +units=m +no_defs")
+crs(rasters_bathy)<- bc_albers
 
-for (i in 2:18) {
+
+for (i in 2:length(files)) {
   raster_i<- raster(paste(files[i], sep="/"))
   rasters_bathy<- stack(rasters_bathy, raster_i)
 }
 
 names(rasters_bathy)
-# [1] "easterness_3x3"  "easterness_5x5"  "easterness_7x7"  "northerness_3x3" "northerness_5x5"
-# [6] "northerness_7x7" "focal_sd.1"      "roughness_5x5"   "focal_sd.2"      "slope_3x3"      
-# [11] "slope_5x5"       "slope_7x7"       "TPI_3x3"         "TPI_5x5"         "TPI_7x7"        
-# [16] "coastwide_20m.1" "TRI_5x5"         "coastwide_20m.2"
+# [1] "easterness_3x3"                     "easterness_5x5"                     "easterness_7x7"                     "northerness_3x3"                   
+# [5] "northerness_5x5"                    "northerness_7x7"                    "focal_sd.1"                         "roughness_5x5"                     
+# [9] "focal_sd.2"                         "slope.1"                            "slope_5x5"                          "slope.2"                           
+# [13] "terrain_rasters_masked_multiband_1" "TPI_3x3"                            "TPI_5x5"                            "TPI_7x7"                           
+# [17] "coastwide_20m.1"                    "TRI_5x5"                            "coastwide_20m.2"       
 
 names_files<- basename(files)
 names_files<- tools::file_path_sans_ext(names_files)
 names(rasters_bathy)<- names_files
+rasters_bathy<- rasters_bathy[[-13]] # remove "terrain_rasters_masked_multiband"
+
 # [1] "easterness_3x3"  "easterness_5x5"  "easterness_7x7"  "northerness_3x3" "northerness_5x5"
 # [6] "northerness_7x7" "roughness_3x3"   "roughness_5x5"   "roughness_7x7"   "slope_3x3"      
 # [11] "slope_5x5"       "slope_7x7"       "TPI_3x3"         "TPI_5x5"         "TPI_7x7"        
 # [16] "TRI_3x3"         "TRI_5x5"         "TRI_7x7" 
 
 
-plot(rasters_bathy[[1:12]])
-plot(rasters_bathy[[12:18]])
-files[6:12]
+plot(rasters_bathy[[13:16]])
 
 # Mask to exclude deep areas 
 bathy_20m_2<- raster(paste(my_path_bathy,"topographic_variables_20mres/coastwide_20m.tif", sep="/"))
@@ -584,11 +614,12 @@ bathy_20m_2[bathy_20m_2 <= 50]<- NA
 plot(bathy_20m_2)
 
 rasters_bathy_masked<- mask(rasters_bathy, bathy_20m_2)
-plot(rasters_bathy_masked$easterness_3x3)
+plot(rasters_bathy_masked[[15:18]])
 
 # Save the masked rasters
 # terra::writeRaster(rasters_bathy_masked, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/terrain_rasters_masked_multiband2.tif",  overwrite = TRUE)
-rasters_bathy_masked<- terra::rast("terrain_rasters_masked_multiband2.tif")
+
+rasters_bathy_masked<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/terrain_rasters_masked_multiband2.tif")
 names(rasters_bathy_masked)
 
 
@@ -607,13 +638,13 @@ cor_matrix <- cor(sample_df, use = "pairwise.complete.obs", method = "pearson")
 
 cor_topographic<- cor_plot_function(data= sample_df[,c(3:ncol(sample_df))],
                                  path_plot= "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots",
-                                 plot_name= "cor_topographic_vars_v2")
+                                 plot_name= "cor_topographic_vars")
 
 # Exclude "Easterness" (correlated with Northerness) and TRI (correlated with Slope)
 exclude_topo<- c("easterness_5x5", "easterness_7x7",
                  "northerness_5x5", "northerness_7x7",
                  "roughness_5x5", "roughness_7x7", "roughness_3x3",
-                 "slope_5x5",
+                 "slope_3x3", "slope_7x7",
                  "TRI_3x3", "TRI_7x7",
                  "TPI_5x5", "TPI_7x7",
                  "TRI_5x5", "TRI_7x7")
@@ -621,15 +652,16 @@ exclude_topo<- c("easterness_5x5", "easterness_7x7",
 keep_layers <- which(!(names(rasters_bathy_masked) %in% exclude_topo))
 topo_selected <- rasters_bathy_masked[[keep_layers]]
 names(topo_selected)
-# [1] "easterness_3x3"  "northerness_3x3" "slope_3x3"       "slope_7x7"       "TPI_3x3"
 
-topo_selected2 <- rasters_bathy[[keep_layers]]
+# [1] "easterness_3x3"  "northerness_3x3" "slope_5x5"  "TPI_3x3"
 
+topo_selected2 <- rasters_bathy_masked[[keep_layers]]
+names(topo_selected2)
 
 # Save the masked rasters
-# terra::writeRaster(topo_selected, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/terrain_rasters_selected.tif")
+# terra::writeRaster(topo_selected2, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/terrain_rasters_selected.tif", overwrite=T)
 topo_selected<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/terrain_rasters_selected.tif")
-names(topo_selected)
+names(topo_selected)<- c( "easterness_3x3",  "northerness_3x3", "slope_5x5" ,      "TPI_3x3"   )
 
 
 # Check the correlation among the selected topographic variables
@@ -643,6 +675,7 @@ vals_df <- as.data.frame(vals)
 head(vals_df)
 
 # Correlation matrix (Pearson by default)
+library(corrplot)
 cor_matrix.d<- cor(vals_df)
 corrplot::corrplot(cor_matrix.d, type = 'lower', tl.col = 'black',#order = 'hclust',
                    cl.ratio = 0.15, tl.srt = 45, col = COL2('PuOr', 30), cl.cex = 2,  tl.cex = 2) #, tl.pos = "n"
@@ -687,12 +720,13 @@ corrplot::corrplot(cor_matrix.d, type = 'lower', tl.col = 'black',#order = 'hclu
 # select_variables <- cbind(select_variables, terrain_vals)
 # summary(select_variables)
 
-### Correlation among all NEMO metrics ============================
 
+
+### Correlation among all NEMO metrics ============================
 names(Corr_variables_selected)
 cor_selected_variables<- cor_plot_function(data= Corr_variables_selected[,-c((ncol(Corr_variables_selected)-1),ncol(Corr_variables_selected))], 
                                        path_plot= "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots",
-                                       plot_name= "cor_selected_variables_noTerrain_final",
+                                       plot_name= "cor_selected_variables_noTerrain_final2",
                                        plot_type = "png")
 
 exclude.2 = c(
@@ -703,17 +737,21 @@ select_variables<- Corr_variables_selected
 selected_variables2<- select_variables[, !(names(select_variables) %in% exclude.2)]
 colnames(selected_variables2)# 25 metrics
 
-correlation_table<- cor(selected_variables2[1:(ncol(selected_variables2)-2)], use = "pairwise.complete.obs")
+correlation_table<- cor(selected_variables2[1:9], use = "pairwise.complete.obs")
 correlation_table<-as.data.frame(correlation_table)
-write.csv(correlation_table, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/correlation_table_nemoSelectedVariables.csv")
+write.csv(correlation_table, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/correlation_table_nemoSelectedVariables_Sep2025.csv")
 
-cor_selected_final<- cor_plot_function(data= selected_variables2[1:(ncol(selected_variables2)-2)], 
+cor_selected_final<- cor_plot_function(data= selected_variables2[1:9], 
+                                       # pdf_height= 25,
+                                       # pdf_width= 30,
                                  path_plot= "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots",
-                                 plot_name= "cor_selected_variables_noTerrain_final", plot_type="png")
+                                 plot_name= "cor_selected_variables_noTerrain_final_v2", plot_type="png")
 
-cor_selected_final<- cor_plot_function(data= selected_variables2[3:ncol(selected_variables2)], 
+cor_selected_final<- cor_plot_function(data= selected_variables2[1:9], 
+                                       pdf_height= 15,
+                                       pdf_width= 15,
                                        path_plot= "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots",
-                                       plot_name= "cor_selected_variables_noTerrain_final", plot_type="pdf")
+                                       plot_name= "cor_selected_variables_noTerrain_final_v2", plot_type="pdf")
 
 
 colnames(selected_variables2)
@@ -724,11 +762,14 @@ colnames(selected_variables2)
 # [17] "nitrate_summer_SD"          "nitrate_winter_SD"          "direction_fall_mean"        "direction_summer_mean"     
 # [21] "direction_summer_minimum"   "direction_winter_maximum"   "direction_winter_mean"   
 
+# 4 Sep
+# [1]] "ammonium_spring_mean"     "ammonium_summer_minimum"  "ammonium_winter_mean"     "currentSpeed_summer_mean" "nitrate_summer_minimum"  
+# [6] "nitrate_winter_mean"      "PAR_summer_mean"          "temperature_summer_mean"  "turbidity_summer_mean"    "longitude"               
+# [11] "latitude" 
 
 ###++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###
-# write.csv(selected_variables2, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_WOut_bathymetricVars_1stAugust2025.csv")
+# write.csv(selected_variables2, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_WOut_bathymetricVars_4Sept2025.csv")
 # save.image("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/variables_selection_1August2025.R")
-
 
 
 

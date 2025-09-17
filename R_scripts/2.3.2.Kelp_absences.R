@@ -9,7 +9,7 @@
 library(terra)
 library(sf)
 
-layers_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/clipped_variables"
+layers_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution"
 SDM_path<- "/Volumes/Romina_PSF/PSF/SDM"
 
 plotspath<- "/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Plots"
@@ -17,39 +17,38 @@ mypath<- "/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp"
 
 
 ### Load env layers =============================================================
-source("/Volumes/Romina_PSF/PSF/R_scripts/stack_rasters_path_function.R")
-stack_vars<- stack_rasters_path_funtion(layers_path, terra_class= "Y")
+# source("/Volumes/Romina_PSF/PSF/R_scripts/stack_rasters_path_function.R")
+# stack_vars<- stack_rasters_path_funtion(layers_path, terra_class= "Y")
+stack_vars<- terra::rast(paste(layers_path,"SalishSeaCast_interp_20m_resolution_FINAL2.tif", sep="/"))
 unique(names(stack_vars))
-names(stack_vars)[4]<- "bathymetry"
 
 bathymetry_20m<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
 bathymetry_20m<- crop(bathymetry_20m, stack_vars)
 
 
 ### Determine the area to create absence records ============================
+# 1. Mask area by depth < 40 m (shallower than -40)
+area<- bathymetry_20m
+area[area < -10 | area > 40]<- NA
+plot(area)
+
 # Create a raster of cell IDs
-bathymetry<- stack_vars[[4]]
-grid_id_raster <- setValues(bathymetry, 1:ncell(bathymetry))
+grid_id_raster <- setValues(area, 1:ncell(area))
 names(grid_id_raster) <- "grid_ID"
 
 
-# 1. Mask area by depth < 40 m (shallower than -40)
-area<- stack_vars[[4]]
-area[area < -20 | area > 70]<- NA
-plot(area)
-
 # Convert raster to data frame
-area.df <- as.data.frame(area, xy = TRUE, cells = TRUE, na.rm = FALSE)
-area.df<- na.exclude(area.df)
+area.df <- as.data.frame(area, xy = TRUE, cells = TRUE, na.rm = T)
+# area.df<- na.exclude(area.df)
 
-area.df<- flexsdm::sdm_extract(
-  data = area.df,
-  x = "x",
-  y = "y",
-  env_layer = bathymetry_20m, # Raster with environmental variables
-  variables = NULL, # Vector with the variable names of predictor variables Usage variables. = c("aet", "cwd", "tmin"). If no variable is specified, function will return data for all layers.
-  filter_na = F  #NA's   :661, but they should be 315 based on the corrected bathymetry points 
-)
+# area.df<- flexsdm::sdm_extract(
+#   data = area.df,
+#   x = "x",
+#   y = "y",
+#   env_layer = bathymetry_20m, # Raster with environmental variables
+#   variables = NULL, # Vector with the variable names of predictor variables Usage variables. = c("aet", "cwd", "tmin"). If no variable is specified, function will return data for all layers.
+#   filter_na = F  #NA's   :661, but they should be 315 based on the corrected bathymetry points 
+# )
 
 area_sf <- st_as_sf(area.df, coords = c("x", "y"), crs = 3005)
 mapview::mapview(area_sf, cex=3, color= "blue")
@@ -94,10 +93,7 @@ kelp_presabs_df[which(is.na(kelp_presabs_df$kelp)), "kelp"]<- "0"
 # df with cell_id and kelp (0 = absence, 1 = presence)
 kelp_presabs_df <- kelp_presabs_df %>%
   group_by(cell_id) %>%
-  # Keep rows where:
-  # - kelp == 1 (presence), OR
-  # - kelp == 0 but no presence in that grid
-  filter(kelp == 1 | all(kelp == 0)) %>%
+  filter(kelp == 1 | all(kelp == 0)) %>% #removes absences from cells that also contain a presence
   ungroup()
 
 

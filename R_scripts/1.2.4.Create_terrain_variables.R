@@ -30,13 +30,19 @@ window_sizes <- c(3, 5, 7) #60, 100m, 220m, and 300m
 # ---- FUNCTIONS ----
 
 # Slope
-get_slope <- function(r, size, filename) {
+get_slope <- function(r, size, filename, suffix="") {
+  # Smooth the input raster
   smooth <- focal(r, w = matrix(1, size, size), fun = mean, na.rm = TRUE)
-  terrain(smooth, v = "slope", unit = "degrees")
-  names(smooth)  <- paste0("slope", suffix)
+  # Compute slope (absolute values)
+  slope_r <- terrain(smooth, v = "slope", unit = "degrees", neighbors = 8)
+  # Assign name
+  names(slope_r) <- paste0("slope", suffix)
   # Save to disk
-  writeRaster(smooth, filename, overwrite = TRUE)
+  writeRaster(slope_r, filename, overwrite = TRUE)
+  
+  return(slope_r)
 }
+
 
 # Roughness (standard deviation)
 get_roughness <- function(r, size, filename) {
@@ -109,7 +115,7 @@ get_orientation <- function(bathy, size, suffix, output_dir) {
 
 # for (w in window_sizes) { # R crash with the loop, so I run each at the time manually
 
-  w= 11
+  w= 5
   suffix <- paste0("_", w, "x", w)
   
   # Calculate each layer

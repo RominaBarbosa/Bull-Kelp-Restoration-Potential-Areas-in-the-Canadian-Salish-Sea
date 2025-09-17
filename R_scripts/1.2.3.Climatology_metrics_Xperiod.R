@@ -12,12 +12,13 @@
 ###=============================================================================
 # Load packages
 library(dplyr)
+library(sf)
 
 source(paste("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions","RFuntion_merge_nemo_climatology_data.R", sep="/"))
 
 variables<- c("current_speed", "current_dir")
-variables<- c("nitrate", "dissolved_inorganic_carbon",
-              "turbidity",  "salinity", "ammonium", "temperature", "total_alkalinity","PAR")
+variables<- c(  "nitrate", "ammonium", "dissolved_inorganic_carbon",
+              "turbidity",  "salinity", "temperature", "total_alkalinity")
 seasons<- c( "winter", "fall","spring","summer") #
 # seasons<- c() # Winter of wind was calculated from 2016 to 2019 due to lck of data from 2014 
 # seasons<- c( "fall","winter","spring","summer") #
@@ -25,10 +26,12 @@ seasons<- c( "winter", "fall","spring","summer") #
 metrics<- c("mean", "maximum", "minimum", "SD")
 metrics<- c("mean", "max", "min", "modal")
 
-output_path<- "/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_"
-# output_path<- "/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics"
-time_period = "blob"
-  
+# output_path<- "/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_"
+output_path<- "/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_post_blob"
+time_period = "post_blob"
+depth = "surface"
+
+
 for (variable in variables) {
   
   for (season in seasons) {
@@ -51,7 +54,7 @@ for (variable in variables) {
 
       merged_data_mean <- merge_nemo_climatology_data(
         depth = "surface",
-        time_period = "blob",
+        time_period = time_period,
         variable = variable,
         metric = metric,
         input_path = "/Volumes/Romina_PSF/PSF/modeled_variables_original/seasonal_metrics_0.5m_depth",
