@@ -584,6 +584,7 @@ get_metrics_optimized2 <- function(model=gam_mod_s, test_data=test_sel,
           test_data[[nm]]  # leave untouched if no scaling info
         }
       }))
+      }else{test_data_scaled = test_data}
       
       # Restore names
       names(test_data_scaled) <- names(test_data)
@@ -598,7 +599,6 @@ get_metrics_optimized2 <- function(model=gam_mod_s, test_data=test_sel,
           test_data_scaled[[paste0("I(", v, "^2)")]] <- test_data_scaled[[v]]^2
         }
       }
-    }
     }
     
     pred <- predict(model, newdata = test_data_scaled, type = "response")
@@ -623,14 +623,14 @@ get_metrics_optimized2 <- function(model=gam_mod_s, test_data=test_sel,
           test_data[[nm]]  # leave untouched if no scaling info
         }
       }))
-      
-      # Restore names
+    }else{test_data_scaled = test_data}
+    
+     # Restore names
       names(test_data_scaled) <- names(test_data)
       
       # Make sure response is factor
-      test_data_scaled$kelp <- as.factor(test_data$kelp)
-    }
-    
+      test_data_scaled$kelp <- as.factor(test_data_scaled$kelp)
+      
     pred <- predict(model, newdata = test_data_scaled, type = "response")
     
   } else if (cls == "rf") {

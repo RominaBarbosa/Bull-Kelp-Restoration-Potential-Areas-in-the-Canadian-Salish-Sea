@@ -18,11 +18,14 @@ library(sf)
 source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/functions_3.1_HSModeling_analyses_&_plots.R")
 source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/plot_response_curves.R")
 
+model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres"
+terrain_path<- ("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables")
+
+
 # This chunk was run and its outputs are stored in a RDS file
 # # Load raster stack of variables resampled at 20 m resoltuion
 raster_stack_20m<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_resolution_FINAL2.tif")
 names(raster_stack_20m)
-terrain_path<- ("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables")
 tif_files <- list.files(terrain_path, pattern = "\\.tif$", full.names = TRUE)
 terrain_vars<-  rast(tif_files[c(12)]) #,5,12,13,15
 names(terrain_vars)
@@ -47,15 +50,11 @@ plot(raster_stack_predict[[1]])
 # saveRDS(raster_stack_predict, "raster_stack_predict.rds")
 
 
-source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/plot_response_curves.R")
 
 # ================================================================
 # STEP 8: Predict in the entire area
 # ================================================================
-model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres"
 setwd(model_results_path)
-dir()
-
 glm_mod_s<- readRDS("glm_mod_s.rds")
 gam_mod_s<- readRDS("gam_mod_s.rds")
 rf_mod_s<-  readRDS("rf_mod_s.rds")
@@ -76,6 +75,7 @@ vars_selected<- c("slope_5x5", "turbidity_summer_mean", "nitrate_winter_mean", "
                   "ammonium_spring_mean", "currentSpeed_summer_mean", "PAR_summer_mean")
 
 
+# Load training and testing dataset 
 train_test_dataset<- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M4.csv")
 train_test_dataset<- (train_test_dataset[,-1])
 names(train_test_dataset)
@@ -87,17 +87,19 @@ test<- train_test_dataset %>%
   filter(set == "test")
 
 
-# Refit models using only selected vars
+# Select only selected variables
 train_sel <- train %>% select(all_of(c("kelp", vars_selected)))
 test_sel <- test %>% select(all_of(c("kelp", vars_selected)))
 
 train_sel$kelp<- as.factor(train_sel$kelp)
 test_sel$kelp<- as.factor(test_sel$kelp)
 
+# save scaling parameters of env. variables
 scaling_params_2 <- train_sel %>%
   summarise(across(where(is.numeric),
                    list(mean = mean, sd = sd), na.rm = TRUE))
 
+# scale variables in training and testing datasets for GLM and GAM
 train_sel_scaled <- scale_with_params(train_sel, scaling_params_2)
 test_sel_scaled  <- scale_with_params(test_sel,  scaling_params_2)
 
@@ -124,8 +126,9 @@ raster_stack_predict<- readRDS("raster_stack_predict.rds")
 raster_stack_predict_scaled<- readRDS("raster_stack_predict_scaled.rds")
 # names(raster_stack_predict) 
 
-
-# Predict probabilities
+# ==============================================================================
+# Predict probabilities  
+# ==============================================================================
 terra::predict(raster_stack_predict_scaled, #glm took a lot of memory so I saved directly to disk
                                   glm_mod_s,
                                   type = "response",
@@ -268,80 +271,171 @@ write.csv(ensemble_SD$weights, "blob_model_tss_weights_M2.csv")
 
 
 
-### Mark ensemble model by Substrate 
-substrate<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Substrate/SOG_substrate_20m.tif")
-substrate_west<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Substrate/WCVI_substrate_20m.tif")
-substrate_north<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Substrate/QCS_substrate_20m.tif")
 
-substrate<- merge(substrate, substrate_north, substrate_west)
-plot(substrate)
-# The predicted raster files are classified as follows: 
-# 1) Rock, 
-# 2) Mixed, 
-# 3) Sand, 
-# 4) Mud
+# PCA ensemble model ===========================================================
+# Combine list of rasters into a SpatRaster
+pred_stack <- rast(pred_rasters_list)
 
+# Extract values as a matrix: rows = cells, cols = models
+pred_matrix <- values(pred_stack)
 
-# Mask model predictions by substrate 
-substrate<- crop(substrate, ens_average)
+# Mask NA rows (cells with NA in any model prediction)
+valid_idx <- complete.cases(pred_matrix)
+pred_matrix_valid <- pred_matrix[valid_idx, ]
 
-# Mask model predictions by substrate 
-substrate_aligned <- terra::rast(ens_average)
-substrate_aligned <- terra::resample(substrate, substrate_aligned, method = "near")
+# PCA on valid data
+pca_res <- prcomp(pred_matrix_valid, center = TRUE, scale. = TRUE)
+pc1 <- pca_res$x[, 1]
+summary(pca_res)
 
-# substrate_aligned[substrate_aligned == 1]<- 1
-substrate_aligned[substrate_aligned == 2]<- 1
-substrate_aligned[substrate_aligned == 3]<- 2
-substrate_aligned[substrate_aligned == 4]<- 2
+# Rescale PC1 to [0,1]
+pc1_scaled <- (pc1 - min(pc1)) / (max(pc1) - min(pc1))
 
-# Save substrate, 1= hard substrate; 2= soft substrate
-# writeRaster(substrate_aligned, "substrate_SOG_aligned.tif", overwrite=T)
+# Create an empty vector to hold results for all cells
+ensemble_vals <- rep(NA, nrow(pred_matrix))
+ensemble_vals[valid_idx] <- pc1_scaled
 
+# Write back to a raster
+ensemble_raster <- pred_stack[[1]]
+values(ensemble_raster) <- ensemble_vals
+plot(ensemble_raster)
+names(ensemble_raster)<- "PCA_ensemble"
 
-substrate_aligned[substrate_aligned == 2]<- NA
-ens_average_masked <- terra::mask(ens_average, substrate_aligned)
-ens_wAverage_masked <- terra::mask(ens_wAverage, substrate_aligned)
-# writeRaster(ens_average_masked, "ens_average_masked_M3.tif", overwrite=T)
-# writeRaster(ens_wAverage_masked, "ens_wAverage_masked_M3.tif", overwrite=T)
+# writeRaster(ensemble_raster, "tifs/ensemble_PCA_blob_M5.tif")
 
 
-ens_average_masked<- rast("ens_average_masked_M3.tif")
-ens_wAverage_masked<- rast("ens_wAverage_masked_M3.tif")
+pc2 <- pca_res$x[, 2]
+pc2_scaled <- (pc2 - min(pc2)) / (max(pc2) - min(pc2))
+
+ensemble_vals_pc2 <- rep(NA, nrow(pred_matrix))
+ensemble_vals_pc2[valid_idx] <- pc2_scaled
+
+ensemble_raster_pc2 <- pred_stack[[1]]
+values(ensemble_raster_pc2) <- ensemble_vals_pc2
+
+plot(ensemble_raster_pc2)
+# writeRaster(ensemble_raster_pc2, "tifs/ensemble_PCA_disagreement_blob_M5.tif")
 
 
+# Add high-resolution coastline (Natural Earth) ---
+library(rnaturalearth)
+library(rnaturalearthdata)
+coast <- ne_coastline(scale = "large", returnclass = "sf")
+coast_vect <- vect(coast)
+# Reproject to EPSG:3005
+# coast_vect <- project(coast_vect, "EPSG:3005")
+
+coast_sf <- st_read("/Volumes/Romina_PSF/Canada_Provincesgpr_000b11a_e/gpr_000b11a_e.shp")
+coast_sf <- st_transform(coast_sf, "EPSG:3005")
+coast_vect <- vect(coast_sf)
+r_extent <- ext(ensemble_raster)  # your raster extent
+coast_crop <- crop(coast_vect, r_extent)
+
+png("PC2_ensemble_blob_M5.png", width = 2000, height = 1500, res = 300)
+terra::plot(ensemble_raster_pc2, main = "Model Disagreement (PC2)")
+plot(coast_crop, col = "lightgrey", border = "darkgrey", lwd = 0.02, add = TRUE)
+dev.off()
+# lines(coast_crop,  lwd = 0.2, col="darkgrey")
+# terra::lines(coast_vect, col = "black", lwd = 0.5)
+
+
+my_palette <- colorRampPalette(c("blue", "green", "yellow", "red"))
+
+png("ensemble_PCA_blob_M5.png", width = 2000, height = 1500, res = 300)
+terra::plot(ensemble_raster, main = "Ensemble Model (PC1)", col = my_palette(100))
+plot(coast_crop, col = "lightgrey", border = "darkgrey", lwd = 0.02, add = TRUE)
+dev.off()
+
+# # Reproject to plots
+# ensemble_pc2_wgs <- project(ensemble_raster, "EPSG:4326")
+# coast_crop_wgs <- project(coast_crop, "EPSG:4326")
+# 
+# # Plot
+# plot(ensemble_pc2_wgs, main = "Model Disagreement (PC2)")
+# plot(coast_crop, col = "lightgrey", border = "darkgrey", lwd = 0.02, add = TRUE)
+
+
+
+
+# #===============================================================================
+# ### Mark ensemble model by Substrate ===========================================
+# substrate<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Substrate/SOG_substrate_20m.tif")
+# substrate_west<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Substrate/WCVI_substrate_20m.tif")
+# substrate_north<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Substrate/QCS_substrate_20m.tif")
+# 
+# substrate<- merge(substrate, substrate_north, substrate_west)
+# plot(substrate)
+# # The predicted raster files are classified as follows: 
+# # 1) Rock, 
+# # 2) Mixed, 
+# # 3) Sand, 
+# # 4) Mud
+# 
+# 
+# # Mask model predictions by substrate 
+# substrate<- crop(substrate, ens_average)
+# 
+# # Mask model predictions by substrate 
+# substrate_aligned <- terra::rast(ens_average)
+# substrate_aligned <- terra::resample(substrate, substrate_aligned, method = "near")
+# 
+# # substrate_aligned[substrate_aligned == 1]<- 1
+# substrate_aligned[substrate_aligned == 2]<- 1
+# substrate_aligned[substrate_aligned == 3]<- 2
+# substrate_aligned[substrate_aligned == 4]<- 2
+# 
+# # Save substrate, 1= hard substrate; 2= soft substrate
+# # writeRaster(substrate_aligned, "substrate_SOG_aligned.tif", overwrite=T)
+# 
+# 
+# substrate_aligned[substrate_aligned == 2]<- NA
+# ens_average_masked <- terra::mask(ens_average, substrate_aligned)
+# ens_wAverage_masked <- terra::mask(ens_wAverage, substrate_aligned)
+# # writeRaster(ens_average_masked, "ens_average_masked_M3.tif", overwrite=T)
+# # writeRaster(ens_wAverage_masked, "ens_wAverage_masked_M3.tif", overwrite=T)
+# 
+# 
+# ens_average_masked<- rast("ens_average_masked_M3.tif")
+# ens_wAverage_masked<- rast("ens_wAverage_masked_M3.tif")
+# 
+# 
 # Calculate threshold for ENSEMBLE MODEL
-# Extract ensemble predictions
-train$ensemble_ave_pred <- terra::extract(ens_average_masked, train_points)[,2]
-train$ensemble_ave_pred
-train$ensemble_wAve_pred <- terra::extract(ens_wAverage_masked, train_points)[,2]
+ens_average<- rast("tifs/ensemble_Average_suitability_blob_M5.tif")
 
+
+# Extract ensemble predictions
+train$ensemble_pca_pred <- terra::extract(ensemble_raster, train_points)[,2]
+train$ensemble_ave_pred <- terra::extract(ens_average, train_points)[,2]
+
+# train$ensemble_ave_pred_masked <- terra::extract(ens_average_masked, train_points)[,2]
+# train$ensemble_pca_pred_masked <- terra::extract(ens_pca_masked, train_points)[,2]
 
 # Compute threshold
 # Compute ROC for ensemble
 # train_masked<- train[,c(3,5,6,22,23)]
-train_masked<- train%>%select(c(kelp, x, y, ensemble_ave_pred, ensemble_wAve_pred))
+train_masked<- train%>%select(c(kelp, ensemble_ave_pred,  ensemble_pca_pred)) # ensemble_pca_pred_masked,ensemble_ave_pred_masked,
 train_masked<- na.exclude(train_masked)
 
 roc_ave_ens <- pROC::roc(response = train_masked$kelp,
                      predictor = train_masked$ensemble_ave_pred)
 plot(roc_ave_ens, col = "green", main = "ROC curve: Ensemble model")
 
-roc_wAve_ens <- pROC::roc(response = train_masked$kelp,
-                     predictor = train_masked$ensemble_wAve_pred)
-plot(roc_wAve_ens, col = "blue", main = "", add=T)
+roc_pca_ens <- pROC::roc(response = train_masked$kelp,
+                     predictor = train_masked$ensemble_pca_pred)
+plot(roc_pca_ens, col = "blue", main = "", add=T)
 
 
 
 tab_ens <- get_thresh_table(
-  roc_obj = roc_wAve_ens,
-  pred = train[,"ensemble_wAve_pred"],
+  roc_obj = roc_ave_ens,
+  pred = train[,"ensemble_ave_pred"],
   truth = train[,"kelp"],
-  model_name = "Ensemble_wAve"
+  model_name = "Ensemble_ave"
 )
 
 tab_ens2 <- get_thresh_table(
-  roc_obj = roc_ave_ens,
-  pred = train[,"ensemble_ave_pred"],
+  roc_obj = roc_pca_ens,
+  pred = train[,"ensemble_pca_pred"],
   truth = train[,"kelp"],
   model_name = "Ensemble_Ave"
 )
@@ -358,7 +452,7 @@ results_table
 # 5 Ensemble_Ave  No omission  -Inf             1         0       0       0.908
 # 6 Ensemble_Ave  10% omission    0.00909       1         0.00806 0.00806 0.908
 
-# With training data: 
+# With training data:
 # Model         Criterion     Threshold Sensitivity Specificity     TSS   AUC
 # 1 Ensemble_wAve Max TSS         0.638         0.893     0.964   0.857   0.982
 # 2 Ensemble_wAve No omission  -Inf             1         0       0       0.982
@@ -367,7 +461,7 @@ results_table
 # 5 Ensemble_Ave  No omission  -Inf             1         0       0       0.974
 # 6 Ensemble_Ave  10% omission    0.00707       1         0.00331 0.00331 0.974
 
-# Model 2 : 
+# Model 2 :
 # Model         Criterion     Threshold Sensitivity Specificity     TSS   AUC
 # 1 Ensemble_wAve Max TSS         0.603         0.903     0.935   0.838   0.981
 # 2 Ensemble_wAve No omission  -Inf             1         0       0       0.981
@@ -386,52 +480,62 @@ results_table
 # 5 Ensemble_Ave  No omission  -Inf             1         0       0       0.981
 # 6 Ensemble_Ave  10% omission    0.00312       1         0.00121 0.00121 0.981
 
+# Model M5
+# Model        Criterion     Threshold Sensitivity Specificity     TSS   AUC
+# 1 Ensemble_ave Max TSS         0.555         0.907     0.882   0.789   0.950
+# 2 Ensemble_ave No omission  -Inf             1         0       0       0.950
+# 3 Ensemble_ave 10% omission    0.00423       1         0.00121 0.00121 0.950
+# 4 Ensemble_Ave Max TSS         0.569         0.907     0.883   0.790   0.951
+# 5 Ensemble_Ave No omission  -Inf             1         0       0       0.951
+# 6 Ensemble_Ave 10% omission    0.00219       1         0.00121 0.00121 0.951
 
-models_performance <- bind_rows(
-  get_metrics_optimized2(model= glm_mod_s, test_data=train, scale_params= scaling_params_2,
-                         model_name = "glm", threshold_type = "youden"),
-  get_metrics_optimized2(gam_mod_s, train, scale_params= scaling_params_2, "gam",
-                         threshold_type = "youden"),#10pct_omission
-  get_metrics_optimized2(rf_mod_s, train, "rf", threshold_type = "youden"),
-  get_metrics_optimized2(brt_mod_s, train, "brt", threshold_type = "youden")
-)
-
-
-ens_performance<- results_table%>%
-  filter(Criterion=="Max TSS")%>%
-  mutate(Criterion = "youden")
-
-colnames(ens_performance)[2]<- "ThresholdType"
-
-models_performance<- rbind(models_performance, ens_performance[,c(1:3,5:7,4)])
-# write.csv(models_performance, "models_performance_calibration_Table_m2.csv")
-
-# Model         ThresholdType Threshold   AUC Sensitivity Specificity   TSS
-# 1 glm           youden            0.609 0.870       0.829       0.781 0.610
-# 2 gam           youden            0.648 0.898       0.812       0.834 0.646
-# 3 rf            youden            0.523 1           1           1     1    
-# 4 brt           youden            0.621 0.963       0.878       0.907 0.785
-# 5 Ensemble_wAve youden            0.638 0.982       0.893       0.964 0.857
-# 6 Ensemble_Ave  youden            0.694 0.974       0.841       0.983 0.824
-
-
-# Model 2
-# Model         ThresholdType Threshold   AUC Sensitivity Specificity   TSS
-# 1 glm           youden            0.634 0.873       0.825       0.807 0.633
-# 2 gam           youden            0.546 0.906       0.868       0.791 0.659
-# 3 rf            youden            0.527 1           1           1     1    
-# 4 brt           youden            0.530 0.957       0.912       0.886 0.797
-# 5 Ensemble_wAve youden            0.603 0.981       0.903       0.935 0.838
-# 6 Ensemble_Ave  youden            0.542 0.973       0.924       0.889 0.813
-
-# Model 3: 
-# Model         ThresholdType Threshold   AUC Sensitivity Specificity   TSS
-# 1 glm           youden            0.637 0.900       0.825       0.848 0.673
-# 2 gam           youden            0.502 0.918       0.881       0.820 0.701
-# 3 rf            youden            0.5   1           1           1     1    
-# 4 brt           youden            0.560 0.979       0.932       0.931 0.864
-# 5 Ensemble_wAve youden            0.503 0.986       0.943       0.908 0.852
-# 6 Ensemble_Ave  youden            0.698 0.981       0.847       0.979 0.826
+# 
+# 
+# models_performance <- bind_rows(
+#   get_metrics_optimized2(model= glm_mod_s, test_data=train, scale_params= scaling_params_2,
+#                          model_name = "glm", threshold_type = "youden"),
+#   get_metrics_optimized2(gam_mod_s, train, scale_params= scaling_params_2, "gam",
+#                          threshold_type = "youden"),#10pct_omission
+#   get_metrics_optimized2(rf_mod_s, train, "rf", threshold_type = "youden"),
+#   get_metrics_optimized2(brt_mod_s, train, "brt", threshold_type = "youden")
+# )
+# 
+# 
+# ens_performance<- results_table%>%
+#   filter(Criterion=="Max TSS")%>%
+#   mutate(Criterion = "youden")
+# 
+# colnames(ens_performance)[2]<- "ThresholdType"
+# 
+# models_performance<- rbind(models_performance, ens_performance[,c(1:3,5:7,4)])
+# # write.csv(models_performance, "models_performance_calibration_Table_m2.csv")
+# 
+# # Model         ThresholdType Threshold   AUC Sensitivity Specificity   TSS
+# # 1 glm           youden            0.609 0.870       0.829       0.781 0.610
+# # 2 gam           youden            0.648 0.898       0.812       0.834 0.646
+# # 3 rf            youden            0.523 1           1           1     1    
+# # 4 brt           youden            0.621 0.963       0.878       0.907 0.785
+# # 5 Ensemble_wAve youden            0.638 0.982       0.893       0.964 0.857
+# # 6 Ensemble_Ave  youden            0.694 0.974       0.841       0.983 0.824
+# 
+# 
+# # Model 2
+# # Model         ThresholdType Threshold   AUC Sensitivity Specificity   TSS
+# # 1 glm           youden            0.634 0.873       0.825       0.807 0.633
+# # 2 gam           youden            0.546 0.906       0.868       0.791 0.659
+# # 3 rf            youden            0.527 1           1           1     1    
+# # 4 brt           youden            0.530 0.957       0.912       0.886 0.797
+# # 5 Ensemble_wAve youden            0.603 0.981       0.903       0.935 0.838
+# # 6 Ensemble_Ave  youden            0.542 0.973       0.924       0.889 0.813
+# 
+# # Model 3: 
+# # Model         ThresholdType Threshold   AUC Sensitivity Specificity   TSS
+# # 1 glm           youden            0.637 0.900       0.825       0.848 0.673
+# # 2 gam           youden            0.502 0.918       0.881       0.820 0.701
+# # 3 rf            youden            0.5   1           1           1     1    
+# # 4 brt           youden            0.560 0.979       0.932       0.931 0.864
+# # 5 Ensemble_wAve youden            0.503 0.986       0.943       0.908 0.852
+# # 6 Ensemble_Ave  youden            0.698 0.981       0.847       0.979 0.826
 
 
 ### Evaluate and select threshold for binary results =====
@@ -474,128 +578,82 @@ roc_train <- pROC::roc(response = train[,"kelp"],
 
 # Find Max TSS threshold
 thr_maxTSS <- roc_train$thresholds[which.max(roc_train$sensitivities + roc_train$specificities - 1)]# Using “drop point” from cumulative coverage or density
+thr_maxSens <- roc_train$thresholds[which.max(roc_train$sensitivities)]
 
 # Predicted suitability for presences in training data
 train_ave_ens<- train
 
-# Predicted suitability for presences and absences
+# Density estimates
 pres_pred <- train_ave_ens$ensemble_ave_pred[train_ave_ens$kelp == 1]
 abs_pred  <- train_ave_ens$ensemble_ave_pred[train_ave_ens$kelp == 0]
 
-# Density estimates
-dens_pres <- density(pres_pred, na.rm = TRUE)
-dens_abs  <- density(abs_pred,  na.rm = TRUE)
-
-# Plot both
-library(ggplot2)
-
-# Density estimates
+# Compute density estimates
 dens_pres <- density(pres_pred, na.rm = TRUE)
 dens_abs  <- density(abs_pred,  na.rm = TRUE)
 
 # Build data frame for ggplot
 df_plot <- data.frame(
-  x = c(dens_pres$x, dens_abs$x),
-  y = c(dens_pres$y, dens_abs$y),
-  group = rep(c("Presences", "Absences"),
-              times = c(length(dens_pres$x), length(dens_abs$x)))
-)
-
-# Thresholds
-threshold_drop <- quantile(pres_pred, 0.001, na.rm = TRUE)  # 0.1% omission
-thr_maxTSS <- thr_maxTSS  # make sure you have this value computed earlier
-
-# Plot Density estimates
-dens_pres <- density(pres_pred, na.rm = TRUE)
-dens_abs  <- density(abs_pred,  na.rm = TRUE)
-
-# Build data frame for ggplot
-df_plot <- data.frame(
-  x = c(dens_pres$x, dens_abs$x),
-  y = c(dens_pres$y, dens_abs$y),
-  group = rep(c("Absences", "Presences"),   # abs first, then pres
+  x = c(dens_abs$x, dens_pres$x),
+  y = c(dens_abs$y, dens_pres$y),
+  group = rep(c("Absences", "Presences"), 
               times = c(length(dens_abs$x), length(dens_pres$x)))
 )
 
 # Thresholds
-threshold_drop <- quantile(pres_pred, 0.001, na.rm = TRUE)  # 0.1% omission --> 0.2054824  --> M2= 0.200.  ---> M4 = 0.1957
-thr_maxTSS <- thr_maxTSS  # 0.6940952  --> M2= 0.5420 --> M4: 0.6977754
-
-# Define inputs
-p <- train_ave_ens$ensemble_ave_pred   # predicted suitability from your model
-y <- train_ave_ens$kelp                # true presence/absence (0/1)
-
-# Extract thresholds
-thr_vec <- roc_train$thresholds
-thr_vec <- thr_vec[is.finite(thr_vec)]  # keep only finite
-
-# Function to compute F1 at a given threshold
-f1_at_thresh <- function(th){
-  pred <- as.integer(p >= th)
-  tp <- sum(pred == 1 & y == 1)
-  fp <- sum(pred == 1 & y == 0)
-  fn <- sum(pred == 0 & y == 1)
-  
-  precision <- if((tp + fp) > 0) tp / (tp + fp) else NA
-  recall    <- if((tp + fn) > 0) tp / (tp + fn) else NA
-  f1        <- if(is.finite(precision) && is.finite(recall) && (precision + recall) > 0) {
-    2 * precision * recall / (precision + recall)
-  } else NA
-  return(f1)
-}
-
-# Compute F1 across thresholds
-f1_vals <- sapply(thr_vec, f1_at_thresh)
-
-# Pick threshold with max F1
-i_bestF1   <- which.max(f1_vals)
-thr_maxF1  <- thr_vec[i_bestF1]
-f1_max_val <- f1_vals[i_bestF1]
-
-cat("Threshold maximizing F1:", thr_maxF1, "\n")
-# Threshold maximizing F1: 0.4689823   
-#M3: Threshold maximizing F1: 0.4645067 
-
-cat("Max F1 value:", f1_max_val, "\n")
-# Max F1 value: 0.9283333 
-# M3: Max F1 value: 0.911525 
-
-# M3:
-# > thr_maxF1
-# [1] 0.4645067
-# > f1_max_val
-# [1] 0.911525
-# > thr_maxTSS
-# [1] 0.6977754
+threshold_drop <- quantile(pres_pred, 0.001, na.rm = TRUE)  # 0.1% presence omission
+threshold_drop <- quantile(pres_pred, 0.009, na.rm = TRUE)  # 0.9% presence omission = 0.2724581 
+# thr_maxTSS should be computed previously
 
 # Plot
-ggplot(df_plot, aes(x = x, y = y, color = group)) +
+# Define label positions (x = middle of each region, y = top 90% of max density)
+y_max <- 3.7#max(df_plot$y, na.rm = TRUE)
+labels <- data.frame(
+  label = c("Unsuitable", "Moderate", "Optimal"),
+  x = c(threshold_drop / 2,
+        (threshold_drop + thr_maxTSS) / 2,
+        thr_maxTSS + (max(df_plot$x) - thr_maxTSS)/2),
+  y = rep(0.9 * y_max, 3)
+)
+# labels[1,2]<- 
+
+ggplot(df_plot, aes(x = x, y = y, color = group, fill = group)) +
+  
+  # Shaded suitability areas
+  geom_rect(aes(xmin = -Inf, xmax = threshold_drop, ymin = -Inf, ymax = Inf),
+            fill = "blue", alpha = 0.01, inherit.aes = FALSE) +  # unsuitable
+  geom_rect(aes(xmin = threshold_drop, xmax = thr_maxTSS, ymin = -Inf, ymax = Inf),
+            fill = "orange", alpha = 0.01, inherit.aes = FALSE) +      # moderate
+  geom_rect(aes(xmin = thr_maxTSS, xmax = Inf, ymin = -Inf, ymax = Inf),
+            fill = "red", alpha = 0.01, inherit.aes = FALSE) +       # optimal
   geom_line(size = 1.2) +
-  geom_vline(xintercept = threshold_drop, color = "darkgreen", linetype = "dashed", size = 1) +
+  # geom_ribbon(aes(ymin = 0, ymax = y), alpha = 0.2, color = NA) + # adds semi-transparent fill
+  geom_vline(xintercept = threshold_drop, color = "orange", linetype = "dashed", size = 1) +
   geom_vline(xintercept = thr_maxTSS, color = "red", linetype = "dashed", size = 1) +
   # geom_vline(xintercept = thr_maxF1, color = "darkorange", linetype = "dashed", size = 1) +
+  # Labels for shaded regions
+  lims(y=c(0, 3.5), x=c(0, 1))+
+  geom_text(data = labels, aes(x = x, y = y, label = label),
+            inherit.aes = FALSE, color = "black", fontface = "bold") +
   labs(
     x = "Predicted Kelp Habitat Suitability",
     y = "Density",
-    color = ""
+    color = "",
+    fill = ""
   ) +
-  scale_color_manual(values = c("blue", "red")) +  # abs = blue, pres = red
-  theme_bw(base_size = 11) +
+  scale_color_manual(values = c("black", "grey")) +  # absences = blue, presences = red
+  scale_fill_manual(values = c("black", "grey")) +
+  theme_bw(base_size = 12) +
   theme(
-    legend.position = c(0.15, 0.84),   # inside, top-left (x%, y%)
-    legend.background = element_rect(fill = alpha("white", 0.1), color = NULL),
-    legend.direction = "vertical",   # stacked vertically
+    legend.position = c(0.8, 0.7),
+    legend.background = element_rect(fill = alpha("white", 0.1), color = NA),
     legend.key = element_blank()
   ) +
-  guides(color = guide_legend(nrow = 2, byrow = TRUE)) +
-  # annotate("text", x = threshold_drop, y = max(df_plot$y)*0.8,
-  #          label = "0.1% Omission", color = "darkgreen", angle = 90, vjust = -0.5) +
-  annotate("text", x = thr_maxTSS, y = max(df_plot$y)*0.8,
-           label = "Max TSS", color = "grey40", angle = 90, vjust = -0.5)+
-  annotate("text", x = thr_maxTSS, y = max(df_plot$y)*0.8,
-           label = "Max TSS", color = "grey40", angle = 90, vjust = -0.5)
+  annotate("text", x = threshold_drop, y = max(df_plot$y)*0.85,
+           label = "0.9% Omission", color = "orange", angle = 90, vjust = -0.5) +
+  annotate("text", x = thr_maxTSS, y = max(df_plot$y)*0.85,
+           label = "Max TSS", color = "red", angle = 90, vjust = -0.5)
 
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Threshold_selection_plot_M3.png", width = 10, height = 8, dpi= 300, units="cm")
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Threshold_selection_plot_M5.png", width = 12, height = 8, dpi= 300, units="cm")
 
 
 
@@ -607,7 +665,6 @@ ggplot(df_plot, aes(x = x, y = y, color = group)) +
 # STEP 10: Binary results & Evaluation
 # ==============================================================================
 # Get metrics of model performance, AUC, Sensitivity and specificity
-
 results_selected <- bind_rows(
   get_metrics_optimized2(model= glm_mod_s, test_data=train_sel, scale_params= scaling_params_2,
                          model_name = "glm", threshold_type = "youden"),

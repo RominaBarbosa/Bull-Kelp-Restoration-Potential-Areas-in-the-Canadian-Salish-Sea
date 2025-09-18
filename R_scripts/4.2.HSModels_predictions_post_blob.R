@@ -15,7 +15,7 @@ library(terra)
 
 source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/functions_3.1_HSModeling_analyses_&_plots.R")
 
-path_postBlob<- "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M2"
+path_postBlob<- "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M5"
 setwd(path_postBlob)
 
 
@@ -60,11 +60,11 @@ raster_stack_20m_all<- mask(raster_stack_20m_all, bathy20m_mask15_40)
 plot(raster_stack_20m_all[[1]])
 
 setwd(path_postBlob)
-saveRDS(raster_stack_20m_all, "raster_stack_predict_postBlob.rds")
+# saveRDS(raster_stack_20m_all, "raster_stack_predict_postBlob.rds")
 
 
 ### Load models  ==============================================
-model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M4"
+model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres"
 
 glm_mod_s<- readRDS(paste(model_results_path,"glm_mod_s.rds", sep="/"))
 gam_mod_s<- readRDS(paste(model_results_path,"gam_mod_s.rds", sep="/"))
@@ -74,7 +74,13 @@ brt_mod_s<- readRDS(paste(model_results_path,"brt_mod_s.rds", sep="/"))
 models <- list(glm_mod_s, gam_mod_s, rf_mod_s, brt_mod_s)
 types <- c("glm", "gam", "rf", "brt")
 
-vars_selected<- colnames(glm_mod_s$data)[2:length(colnames(glm_mod_s$data))]
+
+# Get variables used in the model
+vars <- attr(terms(glm_mod_s), "term.labels")
+vars_clean <- gsub("I\\((.+)\\)", "\\1", vars)   # unwrap I()
+vars_clean <- gsub("\\^.*", "", vars_clean)      # drop powers (^2, ^3, etc.)
+vars_selected <- unique(vars_clean)
+
 
 #  c( "slope_7x7", "ammonium_spring_SD", "ammonium_winter_mean","PAR_summer_mean", "temperature_summer_mean",
 # "turbidity_summer_mean","salinity_summer_SD", "nitrate_summer_mean", "ammonium_summer_mean", "ammonium_spring_mean")   
@@ -99,12 +105,12 @@ train_sds   <- attr(train_scaled_b, "scaled:scale")
 
 raster_stack_predict_scaled<- raster_stack_20m_all[[names(raster_stack_20m_all)%in% vars_selected]]  # original raster stack
 
-# for (v in vars_selected) {
-#   raster_stack_predict_scaled[[v]] <- (raster_stack_20m_all[[v]] - train_means[v]) / train_sds[v]
-# }
-# names(raster_stack_predict_scaled)#<- names(raster_stack_predict)
-# 
-# saveRDS(raster_stack_predict_scaled, "raster_stack_predict_scaled_postBlob.rds")
+for (v in vars_selected) {
+  raster_stack_predict_scaled[[v]] <- (raster_stack_20m_all[[v]] - train_means[v]) / train_sds[v]
+}
+names(raster_stack_predict_scaled)#<- names(raster_stack_predict)
+
+saveRDS(raster_stack_predict_scaled, "raster_stack_predict_scaled_postBlob.rds")
 
 
 
@@ -155,7 +161,7 @@ brt_pred_raster<- rast("brt_postBlob_pred_raster.tif")
 
 tss_weights_1 <- data.frame(
   Model  = c("glm", "gam", "rf", "brt"),
-  TSS    = c(0.673, 0.701 , 1, 0.864),
+  # TSS    = c(0.673, 0.701 , 1, 0.864),
   Weight = c(0.25, 0.25, 0.25, 0.25)
 )
 
@@ -169,14 +175,12 @@ pred_rasters_list <- list(
 
 
 # Build ensemble raster
-start<- Sys.time()
-ens_out_postblob <- ensemble_raster(pred_rasters_list, tss_weights_1)
-end<- Sys.time()
-time_total<- end-start # 2 min
+ens_ave_postblob <- ensemble_raster(pred_rasters_list, tss_weights_1) # 2 min
 
-plot(ens_out_postblob$raster)
-# writeRaster(ens_out_postblob$raster, "ens_output_postblob.tif")
+plot(ens_ave_postblob$raster)
+writeRaster(ens_ave_postblob$raster, "ens_ave_postblob_M5.tif")
 
+# Uncertainty raster
 start<- Sys.time()
 ensemble_model_postBlob<- uncertainty_raster(pred_rasters_list, weights_df = tss_weights_1[,c(1,3)]) 
 end<- Sys.time()
@@ -185,11 +189,9 @@ time_total # 30 min ; M4 55.37769 mins
 
 # saveRDS(ensemble_model_postBlob, "ensemble_model_postBlob.rds")
 
-plot(ensemble_model_rast$max)
-
 
 # Save rasters
-writeRaster(ensemble_model_postBlob$mean, "ensemble_ave_postBlob.tif")
+writeRaster(ens_ave_postblob$raster, "ensemble_ave_postBlob_M5.tif")
 writeRaster(ensemble_model_postBlob$max, "ensemble_model_max_postBlob.tif")
 writeRaster(ensemble_model_postBlob$min, "ensemble_model_min_postBlob.tif")
 writeRaster(ensemble_model_postBlob$sd, "ensemble_model_wSD_postBlob.tif")

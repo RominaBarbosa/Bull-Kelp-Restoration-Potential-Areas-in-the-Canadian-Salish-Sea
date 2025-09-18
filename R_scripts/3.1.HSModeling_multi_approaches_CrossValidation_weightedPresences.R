@@ -767,9 +767,11 @@ ggplot(train.xy, aes(y= y, x= x, color=as.factor(Cluster)))+
 # -----------------------------
 freq <- table(train[which(train$kelp==1), "cluster"])
 inv_freq <- 1 / as.numeric(freq)
+names(inv_freq) <- names(freq)
 
-# raw weights for presences
-pres_weights <- inv_freq[train[which(train$kelp==1), "cluster"]]
+# Now lookup by cluster number as character
+pres_weights <- inv_freq[as.character(train$cluster[train$kelp==1])]
+# pres_weights <- inv_freq[train[which(train$kelp==1), "cluster"]]
 
 # normalize to mean = 1
 pres_weights <- pres_weights * (length(pres_weights) / sum(pres_weights))
@@ -780,6 +782,9 @@ train$weight[train$kelp == 1] <- pres_weights
 
 train_scaled$weight <- 1
 train_scaled$weight[train_scaled$kelp == 1] <- pres_weights
+
+train_scaled_weight<- train_scaled
+train_weight<- train
 
 # -----------------------------
 # 5. Fit models with weights
@@ -1493,6 +1498,7 @@ saveRDS(brt_mod_se, "brt_mod_s.rds")
 # 
 # elapsed time -  0.2 minutes 
 
+# M4 (only hard substrate)
 # mean total deviance = 1.386 
 # mean residual deviance = 0.43 
 # 
@@ -1506,6 +1512,20 @@ saveRDS(brt_mod_se, "brt_mod_s.rds")
 # 
 # elapsed time -  0.44 minutes 
 
+
+# M5 (only hard substrate + weighted presences)
+# mean total deviance = 1.386 
+# mean residual deviance = 0.504 
+# 
+# estimated cv deviance = 0.854 ; se = 0.046 
+# 
+# training data correlation = 0.837 
+# cv correlation =  0.695 ; se = 0.014 
+# 
+# training data AUC score = 0.967 
+# cv AUC score = 0.894 ; se = 0.008 
+# 
+# elapsed time -  0.39 minutes 
 
 
 # ==============================================================================
@@ -1541,17 +1561,8 @@ set.seed(123)
 # Opens a Shiny app to explore spatial autocorrelation range
 predictors_rast<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_resolution_FINAL2.tif")
   
-# rangeExplorer(rasterLayer = predictors_rast,    # your environmental rasters
-#               speciesData = train_sel,       # your species records
-#               species = "kelp")               # response variable column
-# 
-# In the app:
-# 1. Select a predictor
-# 2. Look at the variogram
-# 3. Identify the distance where semivariance flattens (range)
-# 4. Use that distance as 'theRange' in spatialBlock
 
-# ---- Option 2: Compute variogram for one predictor manually ----
+# ---- Compute variogram for one predictor manually ----
 # Example using the first raster layer
 var_data <- train.xy
 
@@ -1573,83 +1584,300 @@ block_size <- fit$range[2]   # or read from the plot manually
 print(paste("Suggested block size (m):", block_size))
 
 
-# ---- Function to calculate metrics ----
-get_metrics <- function(obs, pred){
-  thresh <- optimal.thresholds(data.frame(ID=1:length(obs), obs=obs, pred=pred))$pred
-  cm <- cmx(data.frame(ID=1:length(obs), obs=obs, pred=pred), threshold=thresh)
-  
-  sens <- cm[2,2] / sum(cm[2,])         
-  spec <- cm[1,1] / sum(cm[1,])         
-  tss  <- sens + spec - 1
-  roc  <- auc(obs, pred)                
-  
-  return(c(TSS=tss, ROC=roc, Sensitivity=sens, Specificity=spec))
-}
-
-
-# ---- Models ----
+# ---- Calculate metrics ----
+#=====================================================================
+# ---- “How does the model trained globally perform on each area?”----
 models <- c("glm","gam","rf","brt")
 all_results <- list()
+all_results_long<- list()
+data<- train_sel
+folds<- as.integer(pca_scores$cluster)
+models_list<- list(glm_mod_se, gam_mod_se, rf_mod_se, brt_mod_se)
 
 
 for (m in models){
-  metrics <- matrix(NA, nrow=max(folds), ncol=4)
-  colnames(metrics) <- c("TSS","ROC","Sensitivity","Specificity")
+  metrics_list <- list()  # initialize per model
   
-  for (i in 1:max(folds)){
-    train_data <- data[folds != i, ]
-    test_data  <- data[folds == i, ]
-    
-    if(m == "glm"){
-      mod <- glm(y ~ ., data=train_data, family=binomial)
-      pred <- predict(mod, newdata=test_data, type="response")
+  for (i in 1:4){
+      if(m == "glm"){
+      train_data <- train_sel_scaled[folds != i, ]
+      test_data  <- train_sel_scaled[folds == i, ]
+      mod <- models_list[[1]]
+      # pred <- predict(mod, newdata=test_data, type="response")
+      fold_metrics <- get_metrics_optimized2(mod, test_data, scale_params= NULL, m,
+                             threshold_type = "youden")
     }
     if(m == "gam"){
-      mod <- gam(y ~ s(X1) + s(X2) + s(X3), data=train_data, family=binomial)
-      pred <- predict(mod, newdata=test_data, type="response")
+      train_data <- train_sel_scaled[folds != i, ]
+      test_data  <- train_sel_scaled[folds == i, ]
+      mod <- models_list[[2]]
+      # pred <- predict(mod, newdata=test_data, type="response")
+      fold_metrics <- get_metrics_optimized2(mod, test_data, scale_params= NULL, m,
+                                             threshold_type = "youden")
     }
     if(m == "rf"){
-      mod <- randomForest(as.factor(y) ~ ., data=train_data, ntree=500)
-      pred <- predict(mod, newdata=test_data, type="prob")[,2]
+      train_data <- train_sel[folds != i, ]
+      test_data  <- train_sel[folds == i, ]
+      mod <- models_list[[3]]
+      # pred <- predict(mod, newdata=test_data, type="prob")[,2]
+      fold_metrics <- get_metrics_optimized2(mod, test_data, m,threshold_type = "youden")
     }
     if(m == "brt"){
-      mod <- gbm(y ~ ., data=train_data,
-                 distribution="bernoulli",
-                 n.trees=2000,
-                 interaction.depth=3,
-                 shrinkage=0.01,
-                 n.minobsinnode=10,
-                 verbose=FALSE)
-      pred <- predict(mod, newdata=test_data, type="response", n.trees=2000)
+      train_data <- train_sel[folds != i, ]
+      test_data  <- train_sel[folds == i, ]
+      mod <- models_list[[4]]
+      # pred <- predict(mod, newdata=test_data, type="response", n.trees=2000)
+      fold_metrics <- get_metrics_optimized2(mod, test_data, m,threshold_type = "youden")
     }
     
-    metrics[i,] <- get_metrics(test_data$y, pred)
+    metrics_list[[i]] <- fold_metrics
   }
   
-  # Collect per-model results
-  all_results[[m]] <- data.frame(
+  # Combine all folds into one data frame
+  metrics_df <- do.call(rbind, metrics_list)
+  
+  # Compute mean and SD across folds
+  summary_df <- data.frame(
     Model = m,
-    Metric = colnames(metrics),
-    Mean = colMeans(metrics, na.rm=TRUE),
-    SD = apply(metrics, 2, sd, na.rm=TRUE)
+    Metric = c("Threshold", "AUC", "Sensitivity", "Specificity", "TSS"),
+    Mean = colMeans(metrics_df[, c("Threshold", "AUC", "Sensitivity", "Specificity", "TSS")], na.rm = TRUE),
+    SD   = apply(metrics_df[, c("Threshold", "AUC", "Sensitivity", "Specificity", "TSS")], 2, sd, na.rm = TRUE)
   )
+  
+  all_results[[m]]<-  summary_df
+  all_results_long[[m]]<- metrics_df
 }
 
+# Combine all models
+final_long_summary <- do.call(rbind, all_results)
+final_long <- do.call(rbind, all_results_long)
 
-# ---- Combine and pivot to wide table ----
-results_table <- bind_rows(all_results) %>%
-  pivot_wider(
-    names_from = Metric,
-    values_from = c(Mean, SD),
-    names_glue = "{Metric}_{.value}"
+ggplot(final_long, aes(x= Model, y= AUC, color= Sensitivity))+
+  geom_boxplot()+
+  ylim(c(0,1))
+
+# Pivot to wide format
+final_wide <- final_long %>%
+  pivot_wider(names_from = Metric,
+              values_from = c(Mean, SD),
+              names_sep = "_")
+
+final_wide
+final_wide_formatted <- final_wide %>%
+  mutate(
+    Threshold = sprintf("%.3f (%.3f)", Mean_Threshold, SD_Threshold),
+    AUC       = sprintf("%.3f (%.3f)", Mean_AUC, SD_AUC),
+    Sensitivity = sprintf("%.3f (%.3f)", Mean_Sensitivity, SD_Sensitivity),
+    Specificity = sprintf("%.3f (%.3f)", Mean_Specificity, SD_Specificity),
+    TSS = sprintf("%.3f (%.3f)", Mean_TSS, SD_TSS)
+  ) %>%
+  select(Model, Threshold, AUC, Sensitivity, Specificity, TSS)
+
+final_wide_formatted
+  
+# Pivot data to long format for easier plotting
+# Pivot Mean columns
+mean_long <- final_wide %>%
+  select(Model, starts_with("Mean_")) %>%
+  pivot_longer(
+    cols = -Model,
+    names_to = "Metric",
+    names_prefix = "Mean_",
+    values_to = "Mean"
   )
 
-print(results_table)
+# Pivot SD columns
+sd_long <- final_wide %>%
+  select(Model, starts_with("SD_")) %>%
+  pivot_longer(
+    cols = -Model,
+    names_to = "Metric",
+    names_prefix = "SD_",
+    values_to = "SD"
+  )
+
+# Join Mean and SD
+plot_data <- left_join(mean_long, sd_long, by = c("Model", "Metric"))
+
+# Convert Metric to factor for plotting order
+plot_data <- plot_data %>%
+  mutate(Metric = factor(Metric, levels = c("Threshold","AUC","Sensitivity","Specificity","TSS")))
+
+plot_data<- as.data.frame(plot_data)
+
+# Plot
+plot_data%>%
+  filter(Metric != "Threshold")%>%
+ggplot( aes(x = Metric, y = Mean, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD),
+                position = position_dodge(width = 0.8), width = 0.2) +
+  theme_minimal() +
+  labs(y = "Metric Value", x = "Metric", title = "Model Performance Metrics") +
+  scale_fill_brewer(palette = "Set2")
 
 
 
+#=====================================================================
+# ---- “Can the model generalize to new, unseen areas?” ----
+train_scaled_weight<- train_scaled_weight[,c(1,which(colnames(train_scaled_weight)%in%vars_selected), ncol(train_scaled_weight))]
+train_weight<- train_weight[,c(1,which(colnames(train_weight)%in%vars_selected), ncol(train_weight))]
 
 
+models <- c("glm","gam","rf","brt")
+all_results_b <- list()
+all_results_long_b<- list()
+folds<- as.integer(pca_scores$cluster)
+
+for (m in models){
+  metrics_list <- list()  # initialize per model
+  
+  for (i in 1:4){
+    if(m == "glm"){
+      train_data <- train_scaled_weight[folds != i, ]
+      test_data  <- train_scaled_weight[folds == i, ]
+      
+      terms_quad_sel <- paste0(vars_selected, " + I(", vars_selected, "^2)")
+      glm_formula <- as.formula(paste("kelp ~", paste(c(terms_quad_sel), collapse = " + ")))
+      mod <- glm_mod_se <- glm(glm_formula, 
+                        data = train_data, 
+                        family = binomial,
+                        weights = weight)
+      fold_metrics <- get_metrics_optimized2(mod, test_data, scale_params= NULL, m,
+                                             threshold_type = "youden")
+    }
+    if(m == "gam"){
+      train_data <- train_scaled_weight[folds != i, ]
+      test_data  <- train_scaled_weight[folds == i, ]
+      gam_formula <- as.formula(paste("kelp ~", paste0("s(", vars_selected, ")", collapse = " + ")))
+      mod <- gam(gam_formula, 
+                        data = train_data, 
+                        family = binomial,
+                        weights = weight)
+      
+      fold_metrics <- get_metrics_optimized2(mod, test_data, scale_params= NULL, m,
+                                             threshold_type = "youden")
+    }
+    if(m == "rf"){
+      train_data <- train_weight[folds != i, ]
+      test_data  <- train_weight[folds == i, ]
+      train_data$kelp <- as.factor(train_data$kelp)
+      mod <- randomForest(as.formula(paste("kelp ~", paste(vars_selected, collapse = " + "))),
+                                data = train_data,
+                                ntree = 500,
+                                importance = TRUE,
+                                sampsize = nrow(train_data),
+                                case.weights = train_data$weight)
+      
+      fold_metrics <- get_metrics_optimized2(mod, test_data, m,threshold_type = "youden")
+    }
+    if(m == "brt"){
+      train_data <- train_weight[folds != i, ]
+      test_data  <- train_weight[folds == i, ]
+      
+      train_data$kelp <- as.numeric(as.character(train_data$kelp))
+      
+      mod <- dismo::gbm.step(data = train_data, 
+                                    gbm.x = which(names(train_data) %in% vars_selected),
+                                    gbm.y = which(names(train_data) == "kelp"),
+                                    family = "bernoulli",
+                                    tree.complexity = 3,
+                                    learning.rate = 0.01,
+                                    bag.fraction = 0.5,
+                                    site.weights = train_data$weight)
+      
+      fold_metrics <- get_metrics_optimized2(mod, test_data, m,threshold_type = "youden")
+    }
+    
+    metrics_list[[i]] <- fold_metrics
+  }
+  
+  # Combine all folds into one data frame
+  metrics_df <- do.call(rbind, metrics_list)
+  
+  # Compute mean and SD across folds
+  summary_df <- data.frame(
+    Model = m,
+    Metric = c("Threshold", "AUC", "Sensitivity", "Specificity", "TSS"),
+    Mean = colMeans(metrics_df[, c("Threshold", "AUC", "Sensitivity", "Specificity", "TSS")], na.rm = TRUE),
+    SD   = apply(metrics_df[, c("Threshold", "AUC", "Sensitivity", "Specificity", "TSS")], 2, sd, na.rm = TRUE)
+  )
+  
+  all_results_b[[m]]<-  summary_df
+  all_results_long_b[[m]]<- metrics_df
+}
+
+# Combine all models
+final_long_summary_b <- do.call(rbind, all_results_b)
+final_long_b <- do.call(rbind, all_results_long_b)
+
+ggplot(final_long_b, aes(x= Model, y= AUC, color= Sensitivity))+
+  geom_boxplot()+
+  ylim(c(0,1))
+
+# Pivot to wide format
+final_wide_b <- final_long_summary_b %>%
+  pivot_wider(names_from = Metric,
+              values_from = c(Mean, SD),
+              names_sep = "_")
+
+final_wide_b
+final_wide_formatted_b <- final_wide_b %>%
+  mutate(
+    Threshold = sprintf("%.3f (%.3f)", Mean_Threshold, SD_Threshold),
+    AUC       = sprintf("%.3f (%.3f)", Mean_AUC, SD_AUC),
+    Sensitivity = sprintf("%.3f (%.3f)", Mean_Sensitivity, SD_Sensitivity),
+    Specificity = sprintf("%.3f (%.3f)", Mean_Specificity, SD_Specificity),
+    TSS = sprintf("%.3f (%.3f)", Mean_TSS, SD_TSS)
+  ) %>%
+  select(Model, Threshold, AUC, Sensitivity, Specificity, TSS)
+
+# Save results
+cv_results<- rbind(final_wide_formatted, final_wide_formatted_b)
+cv_results$approach<- rep(c("cluster_evaluation", "model_evaluation"),1, each=4)
+
+# write.csv(cv_results, "Cvalidation_results_M5.csv")
+
+# Pivot data to long format for easier plotting
+# Pivot Mean columns
+mean_long_b <- final_wide_b %>%
+  select(Model, starts_with("Mean_")) %>%
+  pivot_longer(
+    cols = -Model,
+    names_to = "Metric",
+    names_prefix = "Mean_",
+    values_to = "Mean"
+  )
+
+# Pivot SD columns
+sd_long_b <- final_wide_b %>%
+  select(Model, starts_with("SD_")) %>%
+  pivot_longer(
+    cols = -Model,
+    names_to = "Metric",
+    names_prefix = "SD_",
+    values_to = "SD"
+  )
+
+# Join Mean and SD
+plot_data_b <- left_join(mean_long_b, sd_long_b, by = c("Model", "Metric"))
+
+# Convert Metric to factor for plotting order
+plot_data_b <- plot_data_b %>%
+  mutate(Metric = factor(Metric, levels = c("Threshold","AUC","Sensitivity","Specificity","TSS")))
+
+plot_data_b<- as.data.frame(plot_data_b)
+
+# Plot
+plot_data_b%>%
+  filter(Metric != "Threshold")%>%
+  ggplot( aes(x = Metric, y = Mean, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) +
+  geom_errorbar(aes(ymin = Mean - SD, ymax = Mean + SD),
+                position = position_dodge(width = 0.8), width = 0.2) +
+  theme_minimal() +
+  labs(y = "Metric Value", x = "Metric", title = "Model Performance Metrics") +
+  scale_fill_brewer(palette = "Set2")
 
 
 
