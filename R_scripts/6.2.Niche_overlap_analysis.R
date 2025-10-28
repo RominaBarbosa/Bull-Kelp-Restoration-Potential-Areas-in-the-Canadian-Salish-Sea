@@ -1,20 +1,29 @@
 
 
+# # To create raster stack predict blob
+# source("/Documents/GitHub/PSF_kelp-HSM/R_scripts/build_raster_stack_predict_blob.R")
+# # To create raster stack predict post blob
+# source("/Documents/GitHub/PSF_kelp-HSM/R_scripts/build_raster_stack_predict_postblob.R")
 
 library(terra)
+library(raster)
 library(ecospat)
 
 # Load environmental predictors (the same used to build models)
 env_stack_t1 <- readRDS("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres/raster_stack_predict.rds")
 set.seed(123)
-env_all_t1 <- spatSample(env_stack_t1, size = 12000, method = "regular", na.rm = TRUE) #
+env_all_t1 <- spatSample(env_stack_t1, size = 30000, method = "regular", na.rm = TRUE, xy=TRUE) #
 env_all_t1 <- as.data.frame(env_all_t1)# Convert to data.frame
+xy_all_t1       <- env_all_t1[, c("x","y")]
+env_all_vals_t1 <- env_all_t1[, setdiff(names(env_all_t1), c("x","y"))]
+
 
 env_stack_t2 <- readRDS("/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M5/raster_stack_predict_postBlob.rds")
 set.seed(123)
-env_all_t2 <- spatSample(env_stack_t2, size = 12000, method = "regular", na.rm = TRUE) #
+env_all_t2 <- spatSample(env_stack_t2, size = 30000, method = "regular", na.rm = TRUE, xy=TRUE) #
 env_all_t2 <- as.data.frame(env_all_t2)# Convert to data.frame
-
+xy_all_t2       <- env_all_t2[, c("x","y")]
+env_all_vals_t2 <- env_all_t2[, setdiff(names(env_all_t2), c("x","y"))]
 
 # Load ensemble suitability rasters for two periods
 suit_t1 <- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres/tifs/ensemble_Average_suitability_blob_M5.tif")
@@ -26,7 +35,7 @@ thr.sui <- 0.27   # moderate
 thr.opt <- 0.56   # optimal
 
 # Create masks for moderate and optimal habitat
-mask_t1_mod <- (suit_t1 > thr.sui & suit_t1 <= thr.opt)
+mask_t1_mod <- suit_t1 >= thr_mod & suit_t1 <= thr.opt
 mask_t1_opt <- (suit_t1 > thr.opt)
 
 mask_t2_mod <- (suit_t2 > thr.sui & suit_t2 <= thr.opt)
@@ -35,54 +44,246 @@ mask_t2_opt <- (suit_t2 > thr.opt)
 # Sample from moderate and optimal areas
 n_samp <- 20000
 
-env_t1_mod <- spatSample(env_stack, size = n_samp, mask = mask_t1_mod, method = "random", na.rm = TRUE)
-env_t1_opt <- spatSample(env_stack, size = n_samp, mask = mask_t1_opt, method = "random", na.rm = TRUE)
-
-env_t2_mod <- spatSample(env_stack, size = n_samp, mask = mask_t2_mod, method = "random", na.rm = TRUE)
-env_t2_opt <- spatSample(env_stack, size = n_samp, mask = mask_t2_opt, method = "random", na.rm = TRUE)
-
-# Convert to data.frame
+# Period 1
+env_t1_mod <- spatSample(env_stack_t1, size=n_samp, mask=mask_t1_mod, method="random", na.rm=TRUE, xy=TRUE)
 env_t1_mod_df <- as.data.frame(env_t1_mod)
+xy_t1_mod <- env_t1_mod_df[, c("x","y")]
+vals_t1_mod <- env_t1_mod_df[, setdiff(names(env_t1_mod_df), c("x","y"))]
+
+env_t1_opt <- spatSample(env_stack_t1, size=n_samp, mask=mask_t1_opt, method="random", na.rm=TRUE, xy=TRUE)
 env_t1_opt_df <- as.data.frame(env_t1_opt)
+xy_t1_opt <- env_t1_opt_df[, c("x","y")]
+vals_t1_opt <- env_t1_opt_df[, setdiff(names(env_t1_opt_df), c("x","y"))]
 
+# Period 2
+env_t2_mod <- spatSample(env_stack_t2, size=n_samp, mask=mask_t2_mod, method="random", na.rm=TRUE, xy=TRUE)
 env_t2_mod_df <- as.data.frame(env_t2_mod)
-env_t2_opt_df <- as.data.frame(env_t2_opt)
+xy_t2_mod <- env_t2_mod_df[, c("x","y")]
+vals_t2_mod <- env_t2_mod_df[, setdiff(names(env_t2_mod_df), c("x","y"))]
 
-### Run PCA-env
-env_all_merged <- rbind(env_all_t1, env_all_t2)
+env_t2_opt <- spatSample(env_stack_t2, size=n_samp, mask=mask_t2_opt, method="random", na.rm=TRUE, xy=TRUE)
+env_t2_opt_df <- as.data.frame(env_t2_opt)
+xy_t2_opt <- env_t2_opt_df[, c("x","y")]
+vals_t2_opt <- env_t2_opt_df[, setdiff(names(env_t2_opt_df), c("x","y"))]
+
+
+# --- PCA based on background environment ---
+env_all_merged <- rbind(env_all_vals_t1, env_all_vals_t2)
 pca <- prcomp(env_all_merged, center=TRUE, scale.=TRUE)
 
+# --- Project moderate and optimal habitats into PCA space ---
+scores_t1_mod <- predict(pca, newdata=vals_t1_mod)[,1:2]
+scores_t1_opt <- predict(pca, newdata=vals_t1_opt)[,1:2]
+scores_t2_mod <- predict(pca, newdata=vals_t2_mod)[,1:2]
+scores_t2_opt <- predict(pca, newdata=vals_t2_opt)[,1:2]
+scores_bg     <- predict(pca, newdata=env_all_merged)[,1:2]
+scores_bg_t1  <- predict(pca, newdata=env_all_vals_t1)[,1:2]
+scores_bg_t2  <- predict(pca, newdata=env_all_vals_t2)[,1:2]
 
-# Project moderate and optimal samples into PCA space
-scores_t1_mod <- predict(pca, newdata = env_t1_mod_df)[, 1:2]
-scores_t1_opt <- predict(pca, newdata = env_t1_opt_df)[, 1:2]
+# # --- Convert PCA scores to proper format for ecospat.grid.clim.dyn ---
+# # Compute density for background
+# dens_bg <- ks::kde(scores_bg, H = ks::Hpi(scores_bg), gridsize = c(100, 100))
+# 
+# # Convert density to terra raster
+# dens_rast <- rast(list(x = dens_bg$eval.points[[1]],
+#                        y = dens_bg$eval.points[[2]],
+#                        z = dens_bg$estimate))
+# 
+# # Extract values for suitability points
+# vals_mod_t1 <- terra::extract(dens_rast, scores_t1_mod)
+# scores_t1_mod_clean <- scores_t1_mod[!is.na(vals_mod_t1[,1]), ]
+# 
+# # Retry grid.clim.dyn
+# z_mod_t1 <- ecospat.grid.clim.dyn(
+#   glob  = scores_bg,
+#   glob1 = scores_bg,
+#   sp    = scores_t1_mod_clean,
+#   R     = 100
+# )
 
-scores_t2_mod <- predict(pca, newdata = env_t2_mod_df)[, 1:2]
-scores_t2_opt <- predict(pca, newdata = env_t2_opt_df)[, 1:2]
+clip_to_bg <- function(scores, bg){
+  pc1_range <- range(bg[,1])
+  pc2_range <- range(bg[,2])
+  scores[scores[,1] >= pc1_range[1] & scores[,1] <= pc1_range[2] &
+           scores[,2] >= pc2_range[1] & scores[,2] <= pc2_range[2], , drop = FALSE]
+}
 
-# PCA background points
-scores_bg <- predict(pca, newdata = env_all_merged)[, 1:2]
+scores_t1_mod_clipped <- clip_to_bg(scores_t1_mod, scores_bg)
+scores_t1_opt_clipped <- clip_to_bg(scores_t1_opt, scores_bg)
+scores_t2_mod_clipped <- clip_to_bg(scores_t2_mod, scores_bg)
+scores_t2_opt_clipped <- clip_to_bg(scores_t2_opt, scores_bg)
 
-z_mod_t1 <- ecospat.grid.clim.dyn(glob = scores_bg,
+
+
+
+# Use only PC1 and PC2 columns
+z_t1_mod <- ecospat.grid.clim.dyn(glob  = scores_bg,
                                   glob1 = scores_bg,
-                                  sp = scores_t1_mod, R = 100)
+                                  sp    = scores_t1_mod_clipped, 
+                                  R     = 100)
 
-z_mod_t2 <- ecospat.grid.clim.dyn(glob = scores_bg,
+z_t1_opt <- ecospat.grid.clim.dyn(glob  = scores_bg,
                                   glob1 = scores_bg,
-                                  sp = scores_t2_mod, R = 100)
+                                  sp    = scores_t1_opt_clipped, 
+                                  R     = 100)
 
-# Same for optimal habitat:
-z_opt_t1 <- ecospat.grid.clim.dyn(glob = scores_bg,
-                                    glob1 = scores_bg,
-                                    sp = scores_t1_opt, R = 100)
-
-z_opt_t2 <- ecospat.grid.clim.dyn(glob = scores_bg,
+z_t2_mod <- ecospat.grid.clim.dyn(glob  = scores_bg,
                                   glob1 = scores_bg,
-                                  sp = scores_t2_opt, R = 100)
+                                  sp    = scores_t2_mod_clipped, 
+                                  R     = 100)
+
+z_t2_opt <- ecospat.grid.clim.dyn(glob  = scores_bg,
+                                  glob1 = scores_bg,
+                                  sp    = scores_t2_opt_clipped, 
+                                  R     = 100)
+
+z_t1_bg <- ecospat.grid.clim.dyn(glob  = scores_bg,
+                                  glob1 = scores_bg,
+                                  sp    = scores_bg_t1, 
+                                  R     = 100)
+
+z_t2_bg <- ecospat.grid.clim.dyn(glob  = scores_bg,
+                                  glob1 = scores_bg,
+                                  sp    = scores_bg_t2, 
+                                  R     = 100)
+
+ecospat.niche.overlap(z_t1_bg, z_t2_bg, cor = TRUE)
+# $D
+# [1] 0.7603883  # the background environmental space hasn’t changed drastically between periods.
+# $I
+# [1] 0.8838868
+
+
+### Test niche overlap & shifts
+# Quantify overlap with Schoener’s D, I, niche equivalency, and similarity tests.
+# Schoener's D
+ecospat.niche.overlap(z_t1_mod, z_t2_mod, cor = TRUE)
+# $D
+# [1] 0.7502581
+# $I
+# [1] 0.9035694
+
+ecospat.niche.overlap(z_t1_opt, z_t2_opt, cor = TRUE)
+# $D
+# [1] 0.7419563
+# $I
+# [1] 0.8909051
+
+ecospat.niche.overlap(z_t1_mod, z_t1_opt, cor = TRUE)
+# $D
+# [1] 0.863703
+# $I
+# [1] 0.9515714
+
+ecospat.niche.overlap(z_t2_mod, z_t2_opt, cor = TRUE)
+# $D
+# [1] 0.8688094
+# $I
+# [1] 0.9622811
+
+# Niche equivalency test
+# ecospat.niche.equivalency.test(z1, z2, rep = 100)
+
+# Niche similarity test
+# ecospat.niche.similarity.test(z1, z2, rep = 10)
+
+### Plot the PCA-env
+par(mfrow = c(2,2))
+ecospat.plot.niche(z_t1_mod, title = "Period 1")
+ecospat.plot.niche(z_t1_opt, title = "Period 2")
+ecospat.plot.niche(z_t2_mod, title = "Period 1")
+ecospat.plot.niche(z_t2_opt, title = "Period 2")
+
+# Calculate centroids
+centroid_mod_t1 <- colMeans(scores_t1_mod)
+centroid_mod_t2 <- colMeans(scores_t2_mod)
+
+centroid_opt_t1 <- colMeans(scores_t1_opt)
+centroid_opt_t2 <- colMeans(scores_t2_opt)
+
+
+
+# --- Plot example for period 1 with moderate and optimal habitats ---
+par(mfrow = c(1,2))
+plot(NA, xlim=range(scores_bg[,1]), ylim=range(scores_bg[,2]), 
+     xlab="PC1", ylab="PC2", main="Period 1: Habitat Suitability")
+
+# Background points (available)
+points(scores_bg_t1, pch=16, cex=0.5, col="lightgrey")
+points(scores_bg_t2, pch=16, cex=0.5, col="grey")
+
+# Moderate habitat
+points(scores_t1_mod, pch=16, cex=0.5, col=rgb(0,1,0,0.5))  # green transparent
+points(centroid_mod_t1["PC1"], centroid_mod_t1["PC2"], pch=16, cex=0.8, col="black")  # red transparent
+
+# Optimal habitat
+points(scores_t1_opt, pch=16, cex=0.5, col=rgb(1,0,0,0.5))  # red transparent
+points(centroid_opt_t1["PC1"], centroid_opt_t1["PC2"], pch=16, cex=0.8, col="red")  # red transparent
+
+
+legend("topright", legend=c("Available", "Moderate", "Optimal"),
+       col=c("lightgrey", "green", "red"), pch=16, pt.cex=c(0.3,0.5,0.5))
+
+
+
+# PLOT 2
+# Background points (available)
+plot(NA, xlim=range(scores_bg[,1]), ylim=range(scores_bg[,2]), 
+     xlab="PC1", ylab="PC2", main="Period 2 post blob Habitat Suitability")
+
+points(scores_bg_t2, pch=16, cex=0.5, col="lightgrey")
+
+# Moderate habitat
+points(scores_t2_mod, pch=16, cex=0.5, col=rgb(0,1,0,0.5))  # green transparent
+
+# Optimal habitat
+points(scores_t2_opt, pch=16, cex=0.5, col=rgb(1,0,0,0.5))  # red transparent
+
+legend("topright", legend=c("Available", "Moderate", "Optimal"),
+       col=c("lightgrey", "green", "red"), pch=16, pt.cex=c(0.3,0.5,0.5))
+
+
+# PLOT 3 comparing optimal between periods:
+# Background points (available)
+plot(NA, xlim=range(scores_bg[,1]), ylim=range(scores_bg[,2]), 
+     xlab="PC1", ylab="PC2", main="Optimal habitat in both Periods")
+points(scores_bg, pch=16, cex=0.4, col="lightgrey")
+
+#  habitat
+points(scores_t1_opt, pch=16, cex=0.5, col= "gold4")  # green transparent
+points(scores_t2_opt, pch=16, cex=0.5, col= "orange")  # red transparent
+
+legend("topright", legend=c("Available", "Optimal Blob", "Optimal Post Blob"),
+       col=c("lightgrey", "gold4", "orange"), pch=16, pt.cex=c(0.3,0.5,0.5))
+
+
+plot(NA, xlim=range(scores_bg[,1]), ylim=range(scores_bg[,2]), 
+     xlab="PC1", ylab="PC2", main="Moderate habitat in both Periods")
+points(scores_bg, pch=16, cex=0.4, col="lightgrey")
+
+#  habitat
+points(scores_t1_mod, pch=16, cex=0.5, col= "gold4")  # green transparent
+points(scores_t2_mod, pch=16, cex=0.5, col= "orange")  # red transparent
+
+legend("topright", legend=c("Available", "Moderate Blob", "Moderate Post Blob"),
+       col=c("lightgrey", "gold4", "orange"), pch=16, pt.cex=c(0.3,0.5,0.5))
+
+
+
+
+
+
+
+
+
+
 
 # ------------------------------
 # Plot Period 1
 # ------------------------------
+par(mfrow = c(1,2))
+
+
 plot(scores_bg, col = rgb(0.8,0.8,0.8,0.3), pch = 16, cex = 0.5,
      xlab = "PC1", ylab = "PC2", main = "Period 1: Moderate & Optimal Habitat")
 points(scores_t1_mod, col = rgb(0,1,0,0.5), pch = 16, cex = 0.6)  # moderate

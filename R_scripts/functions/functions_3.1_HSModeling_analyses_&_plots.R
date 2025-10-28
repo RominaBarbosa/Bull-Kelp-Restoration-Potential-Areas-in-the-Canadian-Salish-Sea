@@ -1303,23 +1303,16 @@ get_thresh_table <- function(roc_obj, pred, truth, model_name = "model") {
   thr_no_omiss <- thr_vec[i_no_omiss]
   m_no_omiss <- compute_metrics(thr_no_omiss)
   
-  # --- 10% omission threshold (sensitivity >= 0.9) ---
-  finite_idx <- which(is.finite(thr_vec))
-  sens_vec_f <- sens_vec[finite_idx]
-  thr_vec_f  <- thr_vec[finite_idx]
-  i_10 <- which(sens_vec_f >= 0.9)[1]
-  if (is.na(i_10)) {
-    warning("No threshold achieves 90% sensitivity; using maximum sensitivity threshold instead.")
-    i_10 <- which.max(sens_vec_f)
-  }
-  thr_10 <- thr_vec_f[i_10]
-  m_10 <- compute_metrics(thr_10)
+  # --- 1% omission threshold (quantile-based) ---
+  pres_pred <- pred[truth == 1]
+  thr_1perc <- as.numeric(quantile(pres_pred, 0.01, na.rm = TRUE))
+  m_10 <- compute_metrics(thr_1perc)
   
   # --- Return tidy table ---
   tibble::tibble(
     Model = model_name,
-    Criterion = c("Max TSS", "No omission", "10% omission"),
-    Threshold = c(thr_best, thr_no_omiss, thr_10),
+    Criterion = c("Max TSS", "No omission", "1% omission"),
+    Threshold = c(thr_best, thr_no_omiss, thr_1perc),
     Sensitivity = c(m_best[1], m_no_omiss[1], m_10[1]),
     Specificity = c(m_best[2], m_no_omiss[2], m_10[2]),
     TSS = c(m_best[3], m_no_omiss[3], m_10[3]),

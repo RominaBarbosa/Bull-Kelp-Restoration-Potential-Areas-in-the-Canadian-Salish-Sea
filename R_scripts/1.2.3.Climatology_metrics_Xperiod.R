@@ -16,7 +16,7 @@ library(sf)
 
 source(paste("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions","RFuntion_merge_nemo_climatology_data.R", sep="/"))
 
-variables<- c("current_speed", "current_dir")
+variables<- c("current_speed") #, "current_dir"
 variables<- c(  "nitrate", "ammonium", "dissolved_inorganic_carbon",
               "turbidity",  "salinity", "temperature", "total_alkalinity")
 seasons<- c( "winter", "fall","spring","summer") #
@@ -24,7 +24,7 @@ seasons<- c( "winter", "fall","spring","summer") #
 # seasons<- c( "fall","winter","spring","summer") #
 
 metrics<- c("mean", "maximum", "minimum", "SD")
-metrics<- c("mean", "max", "min", "modal")
+metrics<- c("mean", "max", "min") #"modal"
 
 # output_path<- "/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_"
 output_path<- "/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_post_blob"

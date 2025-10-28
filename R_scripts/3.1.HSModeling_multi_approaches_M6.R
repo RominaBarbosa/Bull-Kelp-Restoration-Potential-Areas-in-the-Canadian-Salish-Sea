@@ -549,14 +549,13 @@ pres_weights <- inv_freq[as.character(train$cluster[train$kelp==1])]
 pres_weights <- pres_weights * (length(pres_weights) / sum(pres_weights))
 
 # add weights to dataset
-train$weight <- 1
-train$weight[train$kelp == 1] <- pres_weights
-
-train_scaled$weight <- 1
-train_scaled$weight[train_scaled$kelp == 1] <- pres_weights
+train_weight<- train
+train_weight$weight <- 1
+train_weight$weight[train_weight$kelp == 1] <- pres_weights
 
 train_scaled_weight<- train_scaled
-train_weight<- train
+train_scaled_weight$weight <- 1
+train_scaled_weight$weight[train_scaled_weight$kelp == 1] <- pres_weights
 
 # -----------------------------
 # 5. Fit models with weights
@@ -569,181 +568,18 @@ library(visreg)     # partial effect plots
 
 
 # Specify the predictors for quadratic terms 
-quad_vars <- colnames(train_scaled)[2:9]
-
-# If your actual column names differ (e.g. salinity_summer_SD), update quad_vars accordingly.
-
-# Make a training dataframe with only needed columns + response
-train_glm_df <- train_scaled %>%
-  select(kelp, all_of(quad_vars)) %>%
-  # remove rows with NA in any chosen vars (or consider imputation)
-  filter(if_all(all_of(quad_vars), ~ !is.na(.)))
-
-# linear_terms<- train_scaled %>%
-#   select(kelp, !all_of(quad_vars)) 
-# linear_terms<- colnames(linear_terms)
-# linear_terms<- linear_terms[-1]
+quad_vars <- colnames(train_scaled_weight)[2:9]
 
 # Build the formula with quadratic terms using I(x^2)
 #    Use I(x^2) rather than poly() so prediction on new data is straightforward.
 terms_quad <- paste0(quad_vars, " + I(", quad_vars, "^2)")
-
-# glm_formula <- as.formula(paste("kelp ~", paste(predictors, collapse = " + ")))
 glm_formula <- as.formula(paste("kelp ~", paste(c(terms_quad), collapse = " + ")))
 
 # Fit the GLM (binomial)
 glm_mod_s <- glm(glm_formula,
-                 data = train_scaled,
+                 data = train_scaled_weight,
                  family = binomial(link = "logit"),
                  weights = weight)
-
-# glm_mod_quad <- glm(glm_formula, data = train_scaled, family = binomial(link = "logit"))
-# Call:
-#   glm(formula = glm_formula, family = binomial(link = "logit"), 
-#       data = train_scaled)
-# 
-# Coefficients:
-#   Estimate Std. Error z value Pr(>|z|)    
-# (Intercept)                    2.34998    0.41224   5.700 1.19e-08 ***
-#   nitrate_winter_minimum        -0.47476    0.18991  -2.500 0.012420 *  
-#   I(nitrate_winter_minimum^2)   -0.10936    0.08473  -1.291 0.196801    
-# ammonium_winter_minimum        0.26249    0.36707   0.715 0.474546    
-# I(ammonium_winter_minimum^2)  -0.10236    0.12337  -0.830 0.406718    
-# ammonium_spring_mean          -0.30832    0.19227  -1.604 0.108799    
-# I(ammonium_spring_mean^2)     -0.12726    0.08901  -1.430 0.152793    
-# temperature_summer_mean       -2.41238    0.37761  -6.388 1.68e-10 ***
-#   I(temperature_summer_mean^2)  -0.84984    0.16284  -5.219 1.80e-07 ***
-#   PAR_summer_mean                0.35366    0.18375   1.925 0.054267 .  
-# I(PAR_summer_mean^2)          -0.04635    0.08347  -0.555 0.578691    
-# salinity_summer_SD             0.57366    0.26087   2.199 0.027877 *  
-#   I(salinity_summer_SD^2)       -0.01221    0.11851  -0.103 0.917962    
-# currentSpeed_summer_mean      -0.47663    0.16228  -2.937 0.003313 ** 
-#   I(currentSpeed_summer_mean^2)  0.06082    0.05324   1.142 0.253259    
-# turbidity_summer_mean          1.04235    0.54997   1.895 0.058053 .  
-# I(turbidity_summer_mean^2)    -0.30534    0.14662  -2.082 0.037300 *  
-#   northerness_3x3                0.14678    0.08410   1.745 0.080948 .  
-# I(northerness_3x3^2)          -0.45839    0.16931  -2.707 0.006781 ** 
-#   easterness_3x3                 0.03001    0.08862   0.339 0.734901    
-# I(easterness_3x3^2)           -0.54282    0.16171  -3.357 0.000789 ***
-#   ammonium_spring_SD             0.12323    0.23770   0.518 0.604162    
-# I(ammonium_spring_SD^2)       -0.09609    0.09654  -0.995 0.319580    
-# slope_5x5                      0.99895    0.13656   7.315 2.57e-13 ***
-#   I(slope_5x5^2)                -0.19364    0.04315  -4.488 7.19e-06 ***
-#   TPI_3x3                       -0.06371    0.08169  -0.780 0.435474    
-# ---
-#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-# 
-# (Dispersion parameter for binomial family taken to be 1)
-# 
-# Null deviance: 1799.4  on 1297  degrees of freedom
-# Residual deviance: 1092.6  on 1272  degrees of freedom
-# AIC: 1144.6
-
-
-# Model M2
-# Call:
-#   glm(formula = glm_formula, family = binomial(link = "logit"), 
-#       data = train_scaled)
-# 
-# Coefficients:
-#   Estimate Std. Error z value Pr(>|z|)    
-# (Intercept)                    1.156e+00  2.097e-01   5.512 3.54e-08 ***
-#   ammonium_spring_mean          -2.737e-01  1.522e-01  -1.798 0.072148 .  
-# I(ammonium_spring_mean^2)     -2.196e-01  7.041e-02  -3.119 0.001817 ** 
-#   currentSpeed_summer_mean      -2.312e-01  1.560e-01  -1.482 0.138300    
-# I(currentSpeed_summer_mean^2) -5.343e-06  5.206e-02   0.000 0.999918    
-# nitrate_summer_minimum        -7.993e-01  3.805e-01  -2.101 0.035647 *  
-#   I(nitrate_summer_minimum^2)   -1.853e-01  1.370e-01  -1.353 0.176128    
-# nitrate_winter_mean           -7.412e-01  2.019e-01  -3.672 0.000241 ***
-#   I(nitrate_winter_mean^2)      -1.015e-01  7.505e-02  -1.353 0.176167    
-# PAR_summer_mean                3.343e-01  1.414e-01   2.364 0.018089 *  
-#   I(PAR_summer_mean^2)          -9.342e-02  8.174e-02  -1.143 0.253102    
-# temperature_summer_mean       -2.645e+00  3.636e-01  -7.274 3.48e-13 ***
-#   I(temperature_summer_mean^2)  -3.488e-01  2.012e-01  -1.733 0.083034 .  
-# turbidity_summer_mean          1.788e+00  3.057e-01   5.849 4.95e-09 ***
-#   I(turbidity_summer_mean^2)    -4.524e-01  1.110e-01  -4.076 4.58e-05 ***
-#   slope_5x5                      9.423e-01  1.312e-01   7.181 6.90e-13 ***
-#   I(slope_5x5^2)                -1.753e-01  4.416e-02  -3.969 7.22e-05 ***
-#   TPI_3x3                       -1.202e-01  8.106e-02  -1.483 0.138035    
-# I(TPI_3x3^2)                   2.362e-03  1.942e-02   0.122 0.903187    
-# ---
-#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-# 
-# (Dispersion parameter for binomial family taken to be 1)
-# 
-# Null deviance: 1799.4  on 1297  degrees of freedom
-# Residual deviance: 1108.4  on 1279  degrees of freedom
-# AIC: 1146.4
-# 
-# Number of Fisher Scoring iterations: 8
-
-
-# Model M3
-# Coefficients:
-#   Estimate Std. Error z value Pr(>|z|)    
-# (Intercept)                    0.90061    0.20642   4.363 1.28e-05 ***
-#   ammonium_spring_mean          -0.40874    0.14954  -2.733 0.006270 ** 
-#   I(ammonium_spring_mean^2)     -0.14151    0.06771  -2.090 0.036633 *  
-#   currentSpeed_summer_mean       0.09529    0.15486   0.615 0.538355    
-# I(currentSpeed_summer_mean^2) -0.07934    0.04955  -1.601 0.109343    
-# nitrate_summer_minimum        -0.90436    0.40922  -2.210 0.027106 *  
-#   I(nitrate_summer_minimum^2)   -0.11743    0.14085  -0.834 0.404420    
-# nitrate_winter_mean           -0.74201    0.18224  -4.072 4.67e-05 ***
-#   I(nitrate_winter_mean^2)      -0.07539    0.05986  -1.260 0.207821    
-# PAR_summer_mean                0.59438    0.14146   4.202 2.65e-05 ***
-#   I(PAR_summer_mean^2)          -0.04125    0.08879  -0.465 0.642243    
-# temperature_summer_mean       -2.45847    0.38907  -6.319 2.64e-10 ***
-#   I(temperature_summer_mean^2)  -0.31540    0.21170  -1.490 0.136261    
-# turbidity_summer_mean          1.44732    0.28258   5.122 3.03e-07 ***
-#   I(turbidity_summer_mean^2)    -0.36466    0.10123  -3.602 0.000315 ***
-#   slope_5x5                      0.73639    0.12380   5.948 2.71e-09 ***
-#   I(slope_5x5^2)                -0.15267    0.04157  -3.673 0.000240 ***
-#   ---
-#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-# 
-# (Dispersion parameter for binomial family taken to be 1)
-# 
-# Null deviance: 1768.9  on 1275  degrees of freedom
-# Residual deviance: 1084.4  on 1259  degrees of freedom
-# AIC: 1118.4
-# 
-# Number of Fisher Scoring iterations: 8
-
-
-# WEIGHTED PRESENCES
-# Call:
-#   glm(formula = glm_formula, family = binomial(link = "logit"), 
-#       data = train_scaled, weights = weight)
-# 
-# Coefficients:
-#   Estimate Std. Error z value Pr(>|z|)    
-# (Intercept)                    1.64668    0.18530   8.887  < 2e-16 ***
-#   ammonium_spring_mean          -0.32486    0.10467  -3.104 0.001911 ** 
-#   I(ammonium_spring_mean^2)     -0.04517    0.04459  -1.013 0.311051    
-# currentSpeed_summer_mean      -0.19891    0.11661  -1.706 0.088041 .  
-# I(currentSpeed_summer_mean^2) -0.01791    0.03648  -0.491 0.623529    
-# nitrate_summer_minimum         0.06987    0.30775   0.227 0.820398    
-# I(nitrate_summer_minimum^2)   -0.37891    0.10567  -3.586 0.000336 ***
-#   nitrate_winter_mean           -0.80758    0.13934  -5.796 6.80e-09 ***
-#   I(nitrate_winter_mean^2)      -0.03732    0.04746  -0.786 0.431632    
-# PAR_summer_mean               -0.36830    0.11641  -3.164 0.001558 ** 
-#   I(PAR_summer_mean^2)          -0.41050    0.07014  -5.852 4.85e-09 ***
-#   temperature_summer_mean       -1.80576    0.29175  -6.189 6.04e-10 ***
-#   I(temperature_summer_mean^2)  -0.46703    0.14632  -3.192 0.001414 ** 
-#   turbidity_summer_mean          1.84873    0.22802   8.108 5.16e-16 ***
-#   I(turbidity_summer_mean^2)    -0.52357    0.12709  -4.120 3.79e-05 ***
-#   slope_5x5                      0.65468    0.09806   6.677 2.45e-11 ***
-#   I(slope_5x5^2)                -0.10301    0.03310  -3.112 0.001856 ** 
-#   ---
-#   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-# 
-# (Dispersion parameter for binomial family taken to be 1)
-# 
-# Null deviance: 2298.5  on 1657  degrees of freedom
-# Residual deviance: 1613.8  on 1641  degrees of freedom
-# AIC: 1452.5
-# 
-# Number of Fisher Scoring iterations: 8
 
 
 library(patchwork)
@@ -790,33 +626,38 @@ print(vif_vals)
 # 1.106174                      1.403577 
 
 
-# M3: 
+# M6: 
+# ammonium_spring_mean     I(ammonium_spring_mean^2)      currentSpeed_summer_mean I(currentSpeed_summer_mean^2)               PAR_summer_mean 
+# 2.597414                      1.859930                      3.825198                      2.313262                      4.396807 
+# I(PAR_summer_mean^2)       temperature_summer_mean  I(temperature_summer_mean^2)         turbidity_summer_mean    I(turbidity_summer_mean^2) 
+# 1.690142                     10.026678                      2.317880                      6.412240                      2.937120 
+# salinity_summer_mean     I(salinity_summer_mean^2)                     slope_5x5                I(slope_5x5^2)                       TPI_3x3 
+# 19.017519                      8.635751                      2.830933                      2.435696                      1.416419 
+# I(TPI_3x3^2) 
+# 1.385584 
 
 
 ## GAM
 # ==============================================================================
 gam_formula <- as.formula(paste("kelp ~", paste0("s(", predictors, ")", collapse = " + ")))
-# gam_mod <- gam(gam_formula, data = train_scaled, family = binomial)
 gam_mod_s <- gam(gam_formula,
-                                  data = train_scaled,
+                                  data = train_scaled_weight,
                                   family = binomial,
                                   weights = weight)
                  
                  
-visreg(gam_mod_s, "ammonium_spring_mean", scale = "response")
+visreg(gam_mod_s, "salinity_summer_mean", scale = "response")
 
 ## Random Forest
 # ==============================================================================
-train$kelp <- as.factor(train$kelp)
-rf_mod <-randomForest(x = train[, predictors], y = train$kelp, ntree = 500)
-
-
+train_weight$kelp <- as.factor(train_weight$kelp)
+rf_mod <-randomForest(x = train_weight[, predictors], y = train_weight$kelp, ntree = 500)
 rf_mod_s <- randomForest(as.formula(paste("kelp ~", paste(predictors, collapse = " + "))),
-                         data = train,
+                         data = train_weight,
                          ntree = 500,
                          importance = TRUE,
-                         sampsize = nrow(train),
-                         case.weights = train$weight)
+                         sampsize = nrow(train_weight),
+                         case.weights = train_weight$weight)
 
 # Call:
 #   randomForest(formula = as.formula(paste("kelp ~", paste(predictors,      collapse = " + "))), data = train, ntree = 500, importance = TRUE,      sampsize = nrow(train), case.weights = train$weight) 
@@ -832,21 +673,7 @@ rf_mod_s <- randomForest(as.formula(paste("kelp ~", paste(predictors, collapse =
 
 ## BRT
 # ==============================================================================
-# brt_mod <- gbm(glm_formula,
-#                data = train,
-#                distribution = "bernoulli",
-#                n.trees = 2000,
-#                interaction.depth = 3,
-#                shrinkage = 0.01,
-#                bag.fraction = 0.5,
-#                train.fraction = 1.0,
-#                cv.folds = 5,
-#                verbose = FALSE)
-# ## BRT (gbm.step)
-# train_brt_sel <- train
-# train_brt_sel$kelp <- as.numeric(as.character(train_brt_sel$kelp))
-
-train_brt <- train
+train_brt <- train_weight
 colnames(train_brt)
 train_brt$kelp <- as.numeric(as.character(train_brt$kelp))
 brt_mod_s <- dismo::gbm.step(data = train_brt,
@@ -857,45 +684,6 @@ brt_mod_s <- dismo::gbm.step(data = train_brt,
                              learning.rate = 0.01,
                              bag.fraction = 0.5,
                              site.weights = train_brt$weight)
-
-
-
-# brt_mod <- dismo::gbm.step(data = train_brt, 
-#                     gbm.x = which(names(train_brt) != "kelp"),
-#                     gbm.y = which(names(train_brt) == "kelp"),
-#                     family = "bernoulli",
-#                     tree.complexity = 3,
-#                     learning.rate = 0.01,
-#                     bag.fraction = 0.5)
-
-# fitting final gbm model with a fixed number of 2700 trees for kelp
-# 
-# mean total deviance = 1.386 
-# mean residual deviance = 0.411 
-# 
-# estimated cv deviance = 0.783 ; se = 0.033 
-# 
-# training data correlation = 0.891 
-# cv correlation =  0.716 ; se = 0.013 
-# 
-# training data AUC score = 0.985 
-# cv AUC score = 0.908 ; se = 0.008 
-# 
-# elapsed time -  0.41 minutes 
-
-# M2. Sep 4
-# mean total deviance = 1.386 
-# mean residual deviance = 0.504 
-# 
-# estimated cv deviance = 0.774 ; se = 0.031 
-# 
-# training data correlation = 0.851 
-# cv correlation =  0.72 ; se = 0.015 
-# 
-# training data AUC score = 0.971 
-# cv AUC score = 0.908 ; se = 0.007 
-# 
-# elapsed time -  0.26 minutes 
 
 
 # M3:
@@ -941,6 +729,25 @@ brt_mod_s <- dismo::gbm.step(data = train_brt,
 # cv AUC score = 0.904 ; se = 0.007 
 # 
 # elapsed time -  0.46 minutes 
+
+
+# M5 weighted presences and salinity instead of winter nitrate
+# fitting final gbm model with a fixed number of 2250 trees for kelp
+# 
+# mean total deviance = 1.386 
+# mean residual deviance = 0.544 
+# 
+# estimated cv deviance = 0.849 ; se = 0.039 
+# 
+# training data correlation = 0.828 
+# cv correlation =  0.703 ; se = 0.012 
+# 
+# training data AUC score = 0.963 
+# cv AUC score = 0.9 ; se = 0.007 
+# 
+# elapsed time -  0.44 minutes 
+
+
 
 # ================================
 # STEP 4: Predictions & Evaluation
@@ -1001,6 +808,15 @@ results <- bind_rows(
 # 3 rf        0.494 1           1           1     1    
 # 4 brt       0.556 0.979       0.928       0.930 0.858
 
+# M6
+# Model Threshold   AUC Sensitivity Specificity   TSS
+# <chr>     <dbl> <dbl>       <dbl>       <dbl> <dbl>
+# 1 glm       0.550 0.863       0.818       0.755 0.573
+# 2 gam       0.530 0.893       0.855       0.800 0.655
+# 3 rf        0.498 1           1           1     1    
+# 4 brt       0.460 0.963       0.937       0.864 0.801
+
+
 
 # Pivot the results for plotting
 results_long <- results %>%
@@ -1057,11 +873,7 @@ models <- list(glm_mod_s, gam_mod_s, rf_mod_s, brt_mod_s)
 types <- c("glm", "gam", "rf", "brt")
 
 p_vars<- plot_var_importance_v2(models, types,  top_n = 16, stacked = TRUE)
-
 p_vars2<- plot_var_importance_v2(models, types,  top_n = 16)
-
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots/VariablesImportance_for_SelecBasedOnImp_v4.pdf", width = 12, height = 16, dpi= 300, units="cm")
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots/VariablesImportance_for_SelecBasedOnImp_v4_stacked.pdf", width = 12, height = 16, dpi= 300, units="cm")
 
 
 # Explanation for the ranking of variables strategy:
@@ -1076,13 +888,13 @@ p_vars2<- plot_var_importance_v2(models, types,  top_n = 16)
 # Ranking variables and exclude less important ones using a threshold of 10 weighted score
 res <- rank_variables(models, types, avg_threshold = NULL)
 res$summary_table 
-plot_variable_ranking_v2(res$summary_table, threshold = 15)
+plot_variable_ranking_v2(res$summary_table, threshold = 20)
 # ggsave("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots/VariablesImportance_for_SelecBasedOnImp_M4.pdf", width = 15, height = 13, dpi= 300, units="cm")
 
 
-plot_importance_profiles_v2(res$summary_table, threshold=15)
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/VariablesImportance_profile_step_1_FINAL4.png", width = 18, height = 12, dpi= 300, units="cm")
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/VariablesImportance_profile_step_1_FINAL3.pdf", width = 18, height = 12, dpi= 300, units="cm")
+plot_importance_profiles_v2(res$summary_table, threshold=18)
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/VariablesImportance_profile_VarsSelection_FINAL6.png", width = 18, height = 12, dpi= 300, units="cm")
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/VariablesImportance_profile_VarsSelection_FINAL6.pdf", width = 18, height = 12, dpi= 300, units="cm")
 
 
 
@@ -1091,10 +903,10 @@ plot_importance_profiles_v2(res$summary_table, threshold=15)
 # ==============================================================================
 # STEP 7: SDMs with selected variables 
 # ==============================================================================
-setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres")
-thresh= 15
+setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M6_weightedPres")
+thresh= 18
 
-vars_selected <- rank_variables(models, types, avg_threshold = 15)
+vars_selected <- rank_variables(models, types, avg_threshold = 18)
 vars_selected <- vars_selected$summary_table$Variable
 
 # vars_selected
@@ -1105,27 +917,24 @@ vars_selected <- vars_selected$summary_table$Variable
 # [1] "slope_5x5"                "nitrate_summer_minimum"   "turbidity_summer_mean"    "nitrate_winter_mean"      "temperature_summer_mean" 
 # [6] "ammonium_spring_mean"     "currentSpeed_summer_mean" "PAR_summer_mean"         
 
-
-# Excluded nitrate_summer_minimum because highly correlated with summer mean temperature 
-vars_selected<- c("turbidity_summer_mean",    "temperature_summer_mean",  "nitrate_winter_mean", #"nitrate_summer_minimum",
-                  "slope_5x5",     "currentSpeed_summer_mean",
-                  "ammonium_spring_mean",     "PAR_summer_mean" )
+#  M6
+# [1] "temperature_summer_mean"  "turbidity_summer_mean"    "slope_5x5"                "salinity_summer_mean"     "ammonium_spring_mean"    
+# [6] "PAR_summer_mean"          "currentSpeed_summer_mean"
 
 
 # Refit models using only selected vars
-train_sel <- train %>% select(all_of(c("kelp", vars_selected)))
+train_sel <- train_weight %>% select(all_of(c("kelp", vars_selected)))
 test_sel <- test %>% select(all_of(c("kelp", vars_selected)))
 
-train_sel$kelp<- as.factor(train_sel$kelp)
 train_sel$kelp<- as.factor(train_sel$kelp)
 
 scaling_params_2 <- train_sel %>%
   summarise(across(where(is.numeric),
                    list(mean = mean, sd = sd), na.rm = TRUE))
 
-
 train_sel_scaled <- scale_with_params(train_sel, scaling_params_2)
 test_sel_scaled  <- scale_with_params(test_sel,  scaling_params_2)
+
 
 K <-  5  # <-- set number of clusters
 env_pres <- train_sel_scaled 
@@ -1173,11 +982,15 @@ ggplot(train.xy, aes(y= y, x= x, color=as.factor(Cluster)))+
   geom_point()
 
 # Compute cluster weights  
-freq <- table(train_sel_scaled[which(train_sel_scaled$kelp==1), "cluster"])
-inv_freq <- 1 / as.numeric(freq)
-
 # raw weights for presences
-pres_weights <- inv_freq[train_sel_scaled[which(train_sel_scaled$kelp==1), "cluster"]]
+# Frequency table already has cluster IDs as names
+freq <- table(train_sel_scaled$cluster[train_sel_scaled$kelp == 1])
+
+# Inverse frequency, preserving names
+inv_freq <- 1 / freq
+
+# Extract weights for presence rows
+pres_weights <- inv_freq[as.character(train_sel_scaled$cluster[train_sel_scaled$kelp == 1])]
 
 # normalize to mean = 1
 pres_weights <- pres_weights * (length(pres_weights) / sum(pres_weights))
@@ -1191,7 +1004,12 @@ train_sel$weight[train_sel$kelp == 1] <- pres_weights
 
 
 # ==============================================================================
-setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres")
+setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M6_weightedPres")
+# write.csv(train_sel, "train_selected_table_FINALMODELS.csv")
+# write.csv(train_sel_scaled, "train_selected_scaled_table_FINALMODELS.csv")
+# write.csv(test_sel, "test_selected_table_FINALMODELS.csv")
+# write.csv(test_sel_scaled, "test_selected_scaled_table_FINALMODELS.csv")
+
 
 ## GLM
 quad_vars_sel <- quad_vars[quad_vars %in% vars_selected]
@@ -1201,6 +1019,7 @@ glm_mod_se <- glm(glm_formula,
                  data = train_sel_scaled, 
                  family = binomial,
                  weights = weight)
+
 saveRDS(glm_mod_se, "glm_mod_s.rds")
 
 ## GAM
@@ -1299,8 +1118,25 @@ saveRDS(brt_mod_se, "brt_mod_s.rds")
 # 
 # elapsed time -  0.39 minutes 
 
+#  M6
+# fitting final gbm model with a fixed number of 1600 trees for kelp
+# 
+# mean total deviance = 1.386 
+# mean residual deviance = 0.675 
+# 
+# estimated cv deviance = 0.971 ; se = 0.03 
+# 
+# training data correlation = 0.779 
+# cv correlation =  0.664 ; se = 0.014 
+# 
+# training data AUC score = 0.94 
+# cv AUC score = 0.876 ; se = 0.009 
+# 
+# elapsed time -  0.33 minutes 
 
 
 
+
+# save.image("3.1.HSModeling_multi_approaches_M6.RData")
 
 

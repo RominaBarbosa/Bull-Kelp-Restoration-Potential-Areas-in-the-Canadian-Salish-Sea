@@ -15,7 +15,7 @@ library(terra)
 
 source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/functions_3.1_HSModeling_analyses_&_plots.R")
 
-path_postBlob<- "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M5"
+path_postBlob<- "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M6"
 setwd(path_postBlob)
 
 
@@ -26,7 +26,7 @@ setwd(path_postBlob)
 # STEP 1: Load input variables of Post Blob Period of the entire area
 # =============================================================================
 # Load raster stack of variables resampled at 20 m resoltuion
-raster_stack_20m<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblobM2.tif")
+raster_stack_20m<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif")
 names(raster_stack_20m)
 
 
@@ -50,13 +50,13 @@ names(raster_stack_20m_all)
 
 # Create Mask from bathymetry
 bathy20m<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
-bathy20m_mask15_40<- bathy20m
-bathy20m_mask15_40[!(bathy20m_mask15_40 >= -15 & bathy20m_mask15_40 <= 40)] <- NA # negative values are in land
-plot(bathy20m_mask15_40)
+bathy20m_mask10_40<- bathy20m
+bathy20m_mask10_40[!(bathy20m_mask10_40 >= -10 & bathy20m_mask10_40 <= 40)] <- NA # negative values are in land
+plot(bathy20m_mask10_40)
 
 ### Mask all layers by bathymetry  ==============================================
 plot(raster_stack_20m_all[[1]])
-raster_stack_20m_all<- mask(raster_stack_20m_all, bathy20m_mask15_40)
+raster_stack_20m_all<- mask(raster_stack_20m_all, bathy20m_mask10_40)
 plot(raster_stack_20m_all[[1]])
 
 setwd(path_postBlob)
@@ -64,7 +64,7 @@ setwd(path_postBlob)
 
 
 ### Load models  ==============================================
-model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M5_weightedPres"
+model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M6_weightedPres"
 
 glm_mod_s<- readRDS(paste(model_results_path,"glm_mod_s.rds", sep="/"))
 gam_mod_s<- readRDS(paste(model_results_path,"gam_mod_s.rds", sep="/"))

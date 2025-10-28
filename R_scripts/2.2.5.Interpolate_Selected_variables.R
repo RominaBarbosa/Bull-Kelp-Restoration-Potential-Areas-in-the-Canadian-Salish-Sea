@@ -8,42 +8,14 @@
 ###             2- 20 m resolution multiraster (terra) of variables ############
 ### Author: Romina Barbosa                                      ################
 ### Date: 21-July-2025                                          ################
-### Last edition: 15-Sep-2025   
+### Last edition: 19-Sep-2025   
 ###=============================================================================
 # 19-Aug-2025 : updated selected variables based on GLM and GAM with scaled variables
+# 19-Sep-2025 : updated selected variables based on GLM and GAM with scaled variables, and weighted presences by cluster
 
 library(sf)
 library(terra)
 library(dplyr)
-
-
-# After running models GLM and GAM with scaled variables
-# [1] "slope_7x7"               "ammonium_spring_SD"      "ammonium_winter_minimum"    "PAR_summer_mean"         "temperature_summer_mean"
-# [6] "turbidity_summer_mean"   "salinity_summer_SD"      "nitrate_summer_mean"     "ammonium_summer_mean"    "ammonium_spring_mean"  
-
-# selected_variables<- c("slope_7x7",   "ammonium_spring_SD",   "ammonium_summer_SD", 
-#                        "ammonium_winter_mean",    "PAR_summer_mean", 
-#                        "temperature_summer_mean",
-#               "turbidity_summer_mean",   "salinity_summer_SD",      
-#               "nitrate_summer_minimum",   "nitrate_winter_minimum", 
-#               "ammonium_summer_minimum",  "ammonium_spring_minimum", 
-#               "PAR_summer_maximum", "currentSpeed_summer_mean")
-
-# selected_variables<- c(
-#   "nitrate_summer_minimum",
-#   "nitrate_winter_minimum", # correlated with   "salinity_summer_minimum",
-#   "currentSpeed_summer_mean",
-#   "salinity_summer_SD", # correlated with DIC_spring_SD
-#   "ammonium_winter_minimum",
-#   "ammonium_spring_SD",
-#   "ammonium_summer_SD",
-#   "temperature_summer_mean",
-#   "PAR_summer_mean",# "", # correlated with "PAR_spring_mean",
-#   "PAR_summer_maximum",
-#   "ammonium_spring_mean",
-#   "turbidity_summer_mean",# corr with turbidity_spring_mean
-#   "ammonium_summer_minimum" # corr with ammonium_summer_mean and maximum
-# )
 
 selected_variables<- c("ammonium_spring_mean",
                        "ammonium_summer_minimum",
@@ -53,15 +25,13 @@ selected_variables<- c("ammonium_spring_mean",
                        "nitrate_winter_mean",
                        "PAR_summer_mean",
                        "temperature_summer_mean",
-                       "turbidity_summer_mean")
-# [1]] "ammonium_spring_mean"     "ammonium_summer_minimum"  "ammonium_winter_mean"     "currentSpeed_summer_mean" "nitrate_summer_minimum"  
-# [6] "nitrate_winter_mean"      "PAR_summer_mean"          "temperature_summer_mean"  "turbidity_summer_mean"    "longitude"               
-# [11] "latitude" 
+                       "turbidity_summer_mean",
+                       "salinity_summer_mean")
 
 
 # Upload variables from the SalishSeaCast model and merge 
-# my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_")
 my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_post_blob")
+# my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_")
 setwd(my_path)
 dir()
 files <- list.files(my_path, pattern = "\\.csv$", full.names = TRUE)
@@ -149,24 +119,15 @@ selected_variables %in% colnames(df_all) # all TRUE except the slopevariables
 
 selected_variables_df<- df_all
 colnames(selected_variables_df)
-# colnames(selected_variables_df)
-# [1] "latitude"                 "longitude"                "ammonium_spring_mean"     "ammonium_spring_SD"      
-# [5] "ammonium_summer_minimum"  "ammonium_summer_SD"       "ammonium_winter_minimum"  "currentSpeed_summer_mean"
-# [9] "nitrate_summer_minimum"   "nitrate_winter_minimum"   "PAR_summer_maximum"       "PAR_summer_mean"         
-# [13] "salinity_summer_SD"       "temperature_summer_mean"  "turbidity_summer_mean"   
 
+# M6:
 # [1] "latitude"                 "longitude"                "ammonium_spring_mean"     "ammonium_summer_minimum"  "ammonium_winter_mean"    
-# [6] "currentSpeed_summer_mean" "nitrate_summer_minimum"   "nitrate_winter_mean"      "PAR_summer_mean"          "temperature_summer_mean" 
-# [11] "turbidity_summer_mean"  
-
-
-# M3:
-
+# [6] "currentSpeed_summer_mean" "nitrate_summer_minimum"   "nitrate_winter_mean"      "PAR_summer_mean"          "salinity_summer_mean"    
+# [11] "temperature_summer_mean"  "turbidity_summer_mean"
 
 ###++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###
-# write.csv(selected_variables_df, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_SepFINAL.csv")
-# write.csv(selected_variables_df, "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/selected_variables_to_interpolations_postBlob_M2.csv") # 19 August 2025
-
+# write.csv(selected_variables_df, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_FINALM6.csv")
+# write.csv(selected_variables_df, "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M6/selected_variables_to_interpolations_postBlob.csv") # 19 Sep 2025
 
 
 ## Add temperature variables
@@ -206,20 +167,12 @@ library(terra)
 # Load input data
 bathy <- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/bathy_coastwide_500m.tif")
 # output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interpolated_Blob"
-# variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_SepFINAL.csv")
-variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/selected_variables_to_interpolations_postBlob_M2.csv")
+# variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_FINALM6.csv")
+variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M6/selected_variables_to_interpolations_postBlob.csv")
 output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interpolated_postBlob"
 variables_df<- variables_df[,-1] 
 colnames(variables_df)
 
-
-# variables_interoplation_function<- function(bathy= bathy, variables_data= variables_df, output_path= output_path){
-  
-  # if(colnames(variables_df)[1] != "gridY" & colnames(variables_df)[1] != "gridX"){
-  #   variables_df<- variables_df[,-1]
-  # }
-  
-# variables_df<- variables_1_2
   
   for (i in 3:ncol(variables_df)) { # 
     variable_name<- colnames(variables_df)[i]
@@ -312,148 +265,50 @@ layer_names <- basename(tif_files) %>%
 names(raster_stack) <- layer_names
 
 
-# selected_variables<- c(
-#   "nitrate_summer_minimum",
-#   "nitrate_winter_minimum", # correlated with   "salinity_summer_minimum",
-#   "currentSpeed_summer_mean",
-#   "salinity_summer_SD", # correlated with DIC_spring_SD
-#   "ammonium_winter_minimum",
-#   "ammonium_spring_SD",
-#   "ammonium_summer_SD",
-#   "temperature_summer_mean",
-#   "PAR_summer_mean",# "", # correlated with "PAR_spring_mean",
-#   "PAR_summer_maximum",
-#   "ammonium_spring_mean",
-#   "turbidity_summer_mean",# corr with turbidity_spring_mean
-#   "ammonium_summer_minimum" # corr with ammonium_summer_mean and maximum
-# )
-
-# selected_variables<- c("ammonium_spring_mean",
-#                        "ammonium_summer_minimum",
-#                        "ammonium_winter_mean",
-#                        "currentSpeed_summer_mean",
-#                        "nitrate_summer_minimum",
-#                        "nitrate_winter_mean",
-#                        "PAR_summer_mean",
-#                        "temperature_summer_mean",
-#                        "turbidity_summer_mean")
-
 raster_stack <- raster_stack[[selected_variables]]
 
 # Load your bathymetry raster (20m resolution)
 bathymetry_20m<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
+
 # Resample 500m raster stack to 20m grid using bathymetry as template
 # method = "bilinear" or "near" (nearest neighbor, for categorical)
-
 raster_stack_20m <- resample(raster_stack, bathymetry_20m, method = "bilinear")
-# names(raster_stack_20m) <- layer_names
 
 # Check the result
 print(raster_stack_20m)
 plot(raster_stack_20m[[1]])  # plot first layer
 
 # Save raster stack of resampled variables at 20 m resolution
-terra::writeRaster(raster_stack_20m, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblobM2.tif",
+terra::writeRaster(raster_stack_20m, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif",
                    overwrite=TRUE)
 # terra::writeRaster(raster_stack_20m, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_resolution_postBlob.tif",
 #                    overwrite=TRUE)
 
 
-names(raster_stack_20m)
-# terra::writeRaster(raster_stack_20m$currentSpeed_summer_mean, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/currentSpeed_summer_mean_20m_resolution.tif",
-#                    overwrite=TRUE)
+
+# ###=============================================================================
+# ### Interpolate tidal current from Foreman model ===============================
+# tidal_current_pts<- st_read("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Foreman RMS Tidal Model/Foreman_rms_tidal.shp")
+# 
+# # Reproject to match your bathymetry raster (assuming EPSG:3005)
+# points_sf <- st_transform(tidal_current_pts, crs = 3005)
+# points_sp <- as(points_sf, "Spatial")
+# # names(points_sp)<- "value"
+# 
+# # Create raster grid 
+# template <- rast(ext(bathy), resolution = 500, crs = crs(bathy))
+# template_raster <- raster(template)  # Convert SpatRaster to RasterLayer
+# template_sp <- as(template_raster, "SpatialPixelsDataFrame")
+# 
+# # Run IDW interpolation using sp::idw()
+# idw_result <- idw(formula = RMS_Tidal_ ~ 1, locations = points_sp, newdata = template_sp, idp = 3, nmax = 12)#inverse distance weighted interpolation
+# idw_raster <- rast(idw_result)# Convert idw result back to terra raster
+# 
+# # Plot or save
+# plot(idw_raster, main= paste("interpolation:", "RMS_Tidal_"))
+# 
+# output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Foreman RMS Tidal Model"
+# # writeRaster(idw_raster[[1]], paste(output_path, paste("RMS_Tidal" , "interpolated.tif", sep="_"), sep="/"), overwrite = TRUE)
 
 
 
-
-
-
-###=============================================================================
-### Interpolate tidal current from Foreman model ===============================
-tidal_current_pts<- st_read("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Foreman RMS Tidal Model/Foreman_rms_tidal.shp")
-
-# Reproject to match your bathymetry raster (assuming EPSG:3005)
-points_sf <- st_transform(tidal_current_pts, crs = 3005)
-points_sp <- as(points_sf, "Spatial")
-# names(points_sp)<- "value"
-
-# Create raster grid 
-template <- rast(ext(bathy), resolution = 500, crs = crs(bathy))
-template_raster <- raster(template)  # Convert SpatRaster to RasterLayer
-template_sp <- as(template_raster, "SpatialPixelsDataFrame")
-
-# Run IDW interpolation using sp::idw()
-idw_result <- idw(formula = RMS_Tidal_ ~ 1, locations = points_sp, newdata = template_sp, idp = 3, nmax = 12)#inverse distance weighted interpolation
-idw_raster <- rast(idw_result)# Convert idw result back to terra raster
-
-# Plot or save
-plot(idw_raster, main= paste("interpolation:", "RMS_Tidal_"))
-
-output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Foreman RMS Tidal Model"
-# writeRaster(idw_raster[[1]], paste(output_path, paste("RMS_Tidal" , "interpolated.tif", sep="_"), sep="/"), overwrite = TRUE)
-
-
-
-
-# ###===============================s==============================================
-# # The entire area includes a lot of grids and we need to reduce the number of cells
-# # We will restrict the interpolated area to areas with depth 0-30 m
-# 
-# crs(bathy)
-# 
-# # Stack all env. variables 
-# # rasters.t<- stack_rasters_path_funtion(path= output_path)
-# files_rasters <- list.files(path = output_path, pattern = "\\.tif$", full.names = TRUE)
-# 
-# rasters<- stack(files_rasters[1])
-# filename <- strsplit(tools::file_path_sans_ext(files_rasters[1]), "/")[[1]][7]
-# filename <- strsplit(filename, "_")[[1]][c(1:3)]
-# filename <- paste0(c(filename, "blob"), collapse ="_")
-# names(rasters)<- filename
-# 
-# 
-# for (i in files_rasters[2:length(files_rasters)]) {
-#   raster_i<- raster(i)
-#   filename <- strsplit(tools::file_path_sans_ext(i), "/")[[1]][7]
-#   filename <- strsplit(filename, "_")[[1]][c(1:3)]
-#   filename <- paste0(c(filename, "blob"), collapse ="_")
-#   names(raster_i)<- filename
-#   rasters<- stack(rasters, raster_i)
-# }
-# 
-# 
-# # Stack all TOPOGRAPHIC variables
-# files_rasters.t <- list.files(path = "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables", pattern = "\\.tif$", full.names = TRUE)
-# 
-# files_rasters.t<- files_rasters.t[-2]# - easterness
-# files_rasters.t<- files_rasters.t[-3]# - bathy salishseacast model
-# files_rasters.t<- files_rasters.t[-5]# - TRI
-# 
-# 
-# rasters.t<- stack(files_rasters.t[1])
-# 
-# for (i in files_rasters.t[2:length(files_rasters.t)]) {
-#   raster_i<- raster(i)
-#   rasters.t<- stack(rasters.t, raster_i)
-# }
-# 
-# 
-# ### Mask rasters by bathymetry =================================================
-# bathy <- raster("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/bathy_coastwide_500m.tif")
-# summary(bathy)
-# bathy_filtered <- bathy
-# bathy_filtered[ bathy>= 150 ]<- NA
-# bathy_filtered[ bathy_filtered<= -50 ]<- NA
-# plot(bathy_filtered)
-# 
-# 
-# ## Stack env. variables and topographyc variables 
-# variables_rasters<- stack(rasters, rasters.t)
-# rasters_masked <- raster::mask(variables_rasters, bathy_filtered)
-# 
-# # Plot rasters
-# plot(rasters_masked, ncol=3)
-# plot(rasters_masked[["PAR_summer_mean_blob"]])
-# plot(rasters_masked[["turbidity_summer_mean_blob"]])
-# plot(rasters_masked[["temperature_summer_mean_blob"]])
-# plot(rasters_masked[["salinity_summer_mean_blob"]])
