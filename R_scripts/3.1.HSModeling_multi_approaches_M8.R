@@ -1172,6 +1172,10 @@ vars_selected <- vars_selected$summary_table$Variable
 # [4] "salinity_summer_mean"     "slope_5x5"                "currentSpeed_summer_mean"
 # [7] "ammonium_spring_mean"
 
+
+vars_selected<- vars_selected[-1] # exclude turbidity
+
+
 # Refit models using only selected vars
 train_sel <- train_weight %>% dplyr::select(all_of(c("kelp", vars_selected)))
 test_sel <- test %>% dplyr::select(all_of(c("kelp", vars_selected)))
@@ -1189,7 +1193,7 @@ test_sel_scaled  <- scale_with_params(test_sel,  scaling_params_2)
 K <-  5  # <-- set number of clusters
 env_pres <- train_sel_scaled 
 set.seed(42)
-cl <- kmeans(env_pres[,2:8], centers = K, nstart = 25)
+cl <- kmeans(env_pres[,2:6], centers = K, nstart = 25)
 
 # assign cluster IDs back to full dataset (presences + absences)
 train_sel_scaled$cluster <- NA
@@ -1271,7 +1275,7 @@ predict_kmeans <- function(kmod, newdata,
 
 
 
-test_sel_scaled$cluster<-  predict_kmeans(cl, test_sel_scaled[,2:8], train_for_scaling = train, do_scale = F)
+test_sel_scaled$cluster<-  predict_kmeans(cl, test_sel_scaled[,2:6], train_for_scaling = train, do_scale = F)
 summary(as.factor(test_sel_scaled$cluster))
 # 1   2   3   4   5 
 # 146 197 327 447 105 
@@ -1533,3 +1537,41 @@ brt_mod_se <- dismo::gbm.step(data = train_brt_sel,
 # cv AUC score = 0.843 ; se = 0.01 
 # 
 # elapsed time -  0.08 minutes 
+
+
+
+all_curves_se <- do.call(rbind, lapply(vars_selected, function(v) {
+  grid <- create_var_grid(v, train)   # one-variable-at-a-time grid
+  grid$kelp <- NULL  # remove response variable
+  rbind(
+    get_curve(model=glm_mod_se, v, grid, "GLM", scaling_params),
+    get_curve(gam_mod_se,      v, grid, "GAM", scaling_params),
+    get_curve(rf_mod_se,       v, grid, "randomForest"),
+    get_curve(brt_mod_se,      v, grid, "BRT")
+  )
+}))
+
+
+
+ggplot(all_curves_se, aes(x = x, y = fit, color = model)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~var, scales = "free_x", ncol=3) +
+  theme_bw() +
+  labs(
+    y = "Predicted response",
+    x = NULL,
+    color = "Model",
+    title = "Predicted response curves for all variables across models"
+  )
+
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/ResponseCurves_allVariables_FINAL_M7.pdf", width = 20, height = 17, dpi= 300, units="cm")
+
+
+#-----------------------------
+# Collect results
+results <- bind_rows(
+  get_metrics_optimized(glm_mod_s, train_scaled, "glm"),
+  get_metrics_optimized(gam_mod_s, train_scaled, "gam"),
+  get_metrics_optimized(rf_mod_s, train, "rf"),
+  get_metrics_optimized(brt_mod_s, train, "brt")
+)
