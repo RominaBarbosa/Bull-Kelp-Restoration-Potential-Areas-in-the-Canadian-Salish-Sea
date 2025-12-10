@@ -56,7 +56,7 @@ plot(substrate)
 
 # Mask model predictions by substrate 
 substrate<- crop(substrate, terrain_vars)
-# substrate<- as.factor(substrate)
+substrate<- as.factor(substrate)
 
 # Mask model predictions by substrate 
 substrate_aligned <- terra::rast(terrain_vars)
@@ -74,11 +74,7 @@ substrate_aligned[substrate_aligned == 3]<- 2
 substrate_aligned[substrate_aligned == 4]<- 2
 plot(substrate_aligned)
 
-
-# writeRaster(substrate_aligned, "/Volumes/Romina_PSF/PSF/SDM/SDM_results/substrate_SOG_aligned_.tif")
-
-
-substrate<- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/substrate_SOG_aligned.tif")
+# substrate<- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/substrate_SOG_aligned.tif")
 # substrate<- mask(substrate, slope)
 
 
@@ -98,7 +94,6 @@ kelp_presabs_df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/p
 kelp_presabs_df<- kelp_presabs_df%>%
   select(kelp, substrate,   depth, x,  y)
 kelp_presabs_df$period<- "2014_2019"
-
 
 kelp_presabs_df2<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/MoraSoto_postblob/Presence_absences_kelp_2020_2022_filtered.csv")
 kelp_presabs_df2<- kelp_presabs_df2%>%
@@ -154,7 +149,6 @@ kelp_data_with_variables%>%
   group_by(kelp)%>%
   summarize(n= length(kelp), depth_max= max(coastwide_20m, na.rm = T), 
             depth_min= min(coastwide_20m, na.rm = T))
-
 # Only 2015-2019 period dataset
 # After filtering by substrate (it's already filter by depth):
 #    kelp     n depth_max depth_min
@@ -175,7 +169,7 @@ kelp_data_with_variables<- kelp_data_with_variables%>%
 # 2     1  1183      20.7     -9.69 # presences go until 20.8 m depth, 10 presences were above 10m (in the coast)
 
 # both periods' datasets
-#    kelp     n depth_max depth_min
+# kelp     n depth_max depth_min
 # 1     0  4305      40.0     -9.92
 # 2     1  2037      26.4     -9.69
 
@@ -257,7 +251,7 @@ df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absen
 df<- df[,-1]
 colnames(df)[18]<- "bathymetry_20"
 
-# Remove absences from period 2020-2022
+# Remore absences from period 2020-2022
 df[which(df$period =="2020_2022" & df$kelp == 0), ]<- NA
 
 df<- na.exclude(df)
@@ -292,13 +286,37 @@ df%>%
 # 3     1 2020_2022   854
 
 
-### Downsample absences to match presence count =====
+# Downsample absences to match presence count
 presences <- df %>% filter(kelp == 1)
 absences <- df %>% filter(kelp == 0) %>% sample_n(nrow(presences))
 
 summary(presences$bathymetry_20)
 #     Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 # -9.6917 -0.8142  1.3000  2.3752  4.4972 26.4123 
+
+                                        # M3        # M4                   # M7
+quantile(presences$bathymetry_20, 0.9)  #26.51765  # 8.848001  # 8.145168  # 8.395664
+quantile(presences$bathymetry_20, 0.95) #32.6647   # 12.02184  # 11.24392  # 11.87806
+quantile(presences$bathymetry_20, 0.93) #30.14825  # 10.56405  # 9.554493  # 10.28292
+quantile(presences$bathymetry_20, 0.99) #37.68245  # 17.72347  # 17.48803  # 18.35999
+
+df$kelp<- as.factor(df$kelp)
+df.p<- df
+levels(df.p$kelp)<- c("Absence", "Presence")
+
+ggplot(df.p, aes(x=as.factor(kelp), y=bathymetry_20, fill=as.factor(kelp)))+
+  geom_violin()+
+  geom_boxplot(width=0.2)+ 
+  scale_fill_manual(values=c("blue", "green"))+
+  labs(x="", y= "Depth (m)", fill="Kelp Record")+
+  theme_bw()
+
+ggplot(df.p, aes(x= kelp, y=slope_5x5, color=as.factor(kelp)))+
+  geom_violin()+
+  # scale_color_manual(values=c("blue", "green"))+
+  labs(x="", y= "Depth (m)", fill="Kelp Record")+
+  theme_bw()
+
 
 # Combine balanced data
 df_balanced <- bind_rows(presences, absences)
@@ -336,33 +354,6 @@ ggplot(df_balanced, aes(x=as.factor(kelp), y=bathymetry_20, fill=as.factor(kelp)
 
 
 
-### Explore the max depth inhabited by kelp based on Mora-Soto et al (2024) data ====
-                                        # M3        # M4                   # M7
-quantile(presences$bathymetry_20, 0.9)  #26.51765  # 8.848001  # 8.145168  # 8.395664
-quantile(presences$bathymetry_20, 0.95) #32.6647   # 12.02184  # 11.24392  # 11.87806
-quantile(presences$bathymetry_20, 0.93) #30.14825  # 10.56405  # 9.554493  # 10.28292
-quantile(presences$bathymetry_20, 0.97) #                                    14.591 m
-quantile(presences$bathymetry_20, 0.99) #37.68245  # 17.72347  # 17.48803  # 18.35999
-
-df$kelp<- as.factor(df$kelp)
-df.p<- df
-levels(df.p$kelp)<- c("Absence", "Presence")
-
-ggplot(df.p, aes(x=as.factor(kelp), y=bathymetry_20, fill=as.factor(kelp)))+
-  geom_violin()+
-  geom_boxplot(width=0.1)+ 
-  scale_fill_manual(values=c("blue", "green"))+
-  labs(x="", y= "Depth (m)", fill="Kelp Record")+
-  theme_bw()
-
-ggplot(df.p, aes(x= kelp, y=slope_5x5, color=as.factor(kelp)))+
-  geom_violin()+
-  # scale_color_manual(values=c("blue", "green"))+
-  labs(x="", y= "Depth (m)", fill="Kelp Record")+
-  theme_bw()
-
-
-
 # ================================
 # STEP 2: Train-test split (70/30)
 # ================================
@@ -382,7 +373,7 @@ test_df$cell<- NA
 train_test_dataset<- rbind(train_df, test_df)
 
 train_test_dataset %>%
-  group_by(set, period, kelp)%>%
+  group_by(set, period)%>%
   summarize(n= length(set))
 # set       n
 # 1 test    554
@@ -403,24 +394,10 @@ train_test_dataset %>%
 # 2 test  2020_2022   280
 # 3 train 2014_2019  2278
 # 4 train 2020_2022   574
-
-
 # write.csv(train_test_dataset, "/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M7.csv")
 
 # train_test_dataset<- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M7.csv")
-# train_test_dataset<- (train_test_dataset[,-1])
-
-train_test_dataset%>%
-  group_by(set, period, kelp)%>%
-  summarize(n= length(kelp))
-# set   period     kelp     n
-# 1 test  2014_2019     0   611
-# 2 test  2014_2019     1   331
-# 3 test  2020_2022     1   280
-# 4 train 2014_2019     0  1426
-# 5 train 2014_2019     1   852
-# 6 train 2020_2022     1   574
-
+train_test_dataset<- (train_test_dataset[,-1])
 
 colnames(train_test_dataset)
 predictors <- setdiff(
@@ -455,12 +432,9 @@ train_test_dataset %>%
 
 
 library(vegan)   # or stats::prcomp
-summary(train_test_dataset)
-
 train_test_dataset_clean <- train_test_dataset %>%
   filter(if_all(all_of(predictors), ~ is.finite(.))) %>%
   drop_na(all_of(predictors))
-summary(train_test_dataset_clean)
 
 # Extract the cleaned environmental matrix
 env_clean <- train_test_dataset_clean %>%
@@ -518,6 +492,7 @@ ggplot() +
 
 
 
+
 # Subset the data to only predictors
 predictors_data <- train_test_dataset %>% dplyr::select(all_of(predictors))
 colnames(predictors_data)
@@ -568,10 +543,7 @@ corrplot::corrplot(cor_mat, method = "color", type = "upper",
 # dev.off()
 
 
-
-
-
-### Scale predictors for GLM and GAM  ==========================================
+### Scale predictors for GLM and GAM
 # Save scaling parameters for using to scale variables in predictions 
 train<- train_test_dataset %>% 
   filter(set== "train")
@@ -1200,6 +1172,10 @@ vars_selected <- vars_selected$summary_table$Variable
 # [4] "salinity_summer_mean"     "slope_5x5"                "currentSpeed_summer_mean"
 # [7] "ammonium_spring_mean"
 
+
+vars_selected<- vars_selected[-1] # exclude turbidity
+
+
 # Refit models using only selected vars
 train_sel <- train_weight %>% dplyr::select(all_of(c("kelp", vars_selected)))
 test_sel <- test %>% dplyr::select(all_of(c("kelp", vars_selected)))
@@ -1217,7 +1193,7 @@ test_sel_scaled  <- scale_with_params(test_sel,  scaling_params_2)
 K <-  5  # <-- set number of clusters
 env_pres <- train_sel_scaled 
 set.seed(42)
-cl <- kmeans(env_pres[,2:8], centers = K, nstart = 25)
+cl <- kmeans(env_pres[,2:6], centers = K, nstart = 25)
 
 # assign cluster IDs back to full dataset (presences + absences)
 train_sel_scaled$cluster <- NA
@@ -1299,7 +1275,7 @@ predict_kmeans <- function(kmod, newdata,
 
 
 
-test_sel_scaled$cluster<-  predict_kmeans(cl, test_sel_scaled[,2:8], train_for_scaling = train, do_scale = F)
+test_sel_scaled$cluster<-  predict_kmeans(cl, test_sel_scaled[,2:6], train_for_scaling = train, do_scale = F)
 summary(as.factor(test_sel_scaled$cluster))
 # 1   2   3   4   5 
 # 146 197 327 447 105 
@@ -1561,3 +1537,41 @@ brt_mod_se <- dismo::gbm.step(data = train_brt_sel,
 # cv AUC score = 0.843 ; se = 0.01 
 # 
 # elapsed time -  0.08 minutes 
+
+
+
+all_curves_se <- do.call(rbind, lapply(vars_selected, function(v) {
+  grid <- create_var_grid(v, train)   # one-variable-at-a-time grid
+  grid$kelp <- NULL  # remove response variable
+  rbind(
+    get_curve(model=glm_mod_se, v, grid, "GLM", scaling_params),
+    get_curve(gam_mod_se,      v, grid, "GAM", scaling_params),
+    get_curve(rf_mod_se,       v, grid, "randomForest"),
+    get_curve(brt_mod_se,      v, grid, "BRT")
+  )
+}))
+
+
+
+ggplot(all_curves_se, aes(x = x, y = fit, color = model)) +
+  geom_line(size = 1.2) +
+  facet_wrap(~var, scales = "free_x", ncol=3) +
+  theme_bw() +
+  labs(
+    y = "Predicted response",
+    x = NULL,
+    color = "Model",
+    title = "Predicted response curves for all variables across models"
+  )
+
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/ResponseCurves_allVariables_FINAL_M7.pdf", width = 20, height = 17, dpi= 300, units="cm")
+
+
+#-----------------------------
+# Collect results
+results <- bind_rows(
+  get_metrics_optimized(glm_mod_s, train_scaled, "glm"),
+  get_metrics_optimized(gam_mod_s, train_scaled, "gam"),
+  get_metrics_optimized(rf_mod_s, train, "rf"),
+  get_metrics_optimized(brt_mod_s, train, "brt")
+)

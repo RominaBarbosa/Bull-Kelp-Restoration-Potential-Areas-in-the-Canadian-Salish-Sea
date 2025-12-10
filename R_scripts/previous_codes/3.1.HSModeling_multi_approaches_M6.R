@@ -3,7 +3,7 @@
 ###                                                  ################
 ###                                                  ################
 ### Author: Romina Barbosa                           ################
-### Last version: 07-Oct-2025                        ################
+### Last version: 19-Sep-2025                        ################
 ###==================================================================
 library(tidyr)
 library(stringr)
@@ -32,9 +32,6 @@ variables_selection_path<- "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/M6"
 raster_stack_20m<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_blob.tif")
 names(raster_stack_20m)
 
-raster_stack_postblob<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif")
-names(raster_stack_postblob)
-  
 ### Load terrain variables =====================================================
 terrain_path<- ("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables")
 tif_files <- list.files(terrain_path, pattern = "\\.tif$", full.names = TRUE)
@@ -56,7 +53,7 @@ plot(substrate)
 
 # Mask model predictions by substrate 
 substrate<- crop(substrate, terrain_vars)
-# substrate<- as.factor(substrate)
+substrate<- as.factor(substrate)
 
 # Mask model predictions by substrate 
 substrate_aligned <- terra::rast(terrain_vars)
@@ -72,13 +69,8 @@ names(substrate_aligned)<- "substrate_aligned"
 substrate_aligned[substrate_aligned == 2]<- 1
 substrate_aligned[substrate_aligned == 3]<- 2
 substrate_aligned[substrate_aligned == 4]<- 2
-plot(substrate_aligned)
 
-
-# writeRaster(substrate_aligned, "/Volumes/Romina_PSF/PSF/SDM/SDM_results/substrate_SOG_aligned_.tif")
-
-
-substrate<- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/substrate_SOG_aligned.tif")
+# substrate<- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/substrate_SOG_aligned.tif")
 # substrate<- mask(substrate, slope)
 
 
@@ -90,60 +82,40 @@ raster_stack_20m_all<- c(raster_stack_20m, terrain_vars, substrate_aligned, bath
 names(raster_stack_20m_all)
 plot(raster_stack_20m_all[[10:11]])
 
-raster_stack_20m_postblob<- c(raster_stack_postblob, terrain_vars, substrate_aligned, bathy)
-names(raster_stack_20m_postblob)
 
 ### Extract raster values at kelp locations ====================================
 kelp_presabs_df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/presence_data_2014_to_2019_filtered_depth&rocky.csv")
+# kelp_presabs_df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL2.csv")
+colnames(kelp_presabs_df)
 kelp_presabs_df<- kelp_presabs_df%>%
-  select(kelp, substrate,   depth, x,  y)
-kelp_presabs_df$period<- "2014_2019"
+  select(c(x,y,kelp, Cluster))#[,c(2,3,11:14)]
 
-
-kelp_presabs_df2<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/MoraSoto_postblob/Presence_absences_kelp_2020_2022_filtered.csv")
-kelp_presabs_df2<- kelp_presabs_df2%>%
-  select(kelp, substrate,   depth, x,  y)
-kelp_presabs_df2$period<- "2020_2022"
+head(kelp_presabs_df)
 
 
 # Convert kelp coords to terra SpatVector points
 kelp_points <- vect(kelp_presabs_df, geom = c("x", "y"))
 crs(kelp_points) <- "EPSG:3005"
 
-kelp_points2 <- vect(kelp_presabs_df2, geom = c("x", "y"))
-crs(kelp_points2) <- "EPSG:3005"
-
-# Extract variables values at records' locations
 extracted_values <- terra::extract(raster_stack_20m_all, kelp_points)
-
-extracted_values2 <- terra::extract(raster_stack_20m_postblob, kelp_points2)
-
 
 # Combine extracted values with kelp coordinates 
 kelp_data_with_variables <- cbind(kelp_presabs_df, extracted_values[, -1])  # remove ID column from extract
 colnames(kelp_data_with_variables)
 
-kelp_data_with_variables2 <- cbind(kelp_presabs_df2, extracted_values2[, -1])  # remove ID column from extract
-colnames(kelp_data_with_variables2)
-
 # Explore number of points with NAs (Presences and absences)
 kelp_data_with_variables$substrate_aligned<- as.factor(kelp_data_with_variables$substrate_aligned)
 summary(kelp_data_with_variables)
 
-kelp_data_with_variables2<- kelp_data_with_variables2[,which(colnames(kelp_data_with_variables2) %in% colnames(kelp_data_with_variables))]
-colnames(kelp_data_with_variables)== colnames(kelp_data_with_variables2)
 
+# Select the records on the rocky substrate
+kelp_data_with_variables%>%
+  group_by(substrate_aligned, kelp)%>%
+  count()
 
-# Merge datasets from both period of time
-kelp_data_with_variables<- rbind(kelp_data_with_variables, kelp_data_with_variables2)
-
-colnames(kelp_data_with_variables)
-head(kelp_data_with_variables)
-summary(as.factor(kelp_data_with_variables$substrate)) # 20 NAs
-
-# Exclude all records in soft substrate
-kelp_data_with_variables<- kelp_data_with_variables%>%
-  filter(substrate == 1)
+# substrate_aligned  kelp     n
+# 1 1                     0  2604
+# 2 1                     1  1190
 
 
 # View the result
@@ -154,17 +126,12 @@ kelp_data_with_variables%>%
   group_by(kelp)%>%
   summarize(n= length(kelp), depth_max= max(coastwide_20m, na.rm = T), 
             depth_min= min(coastwide_20m, na.rm = T))
-
-# Only 2015-2019 period dataset
 # After filtering by substrate (it's already filter by depth):
 #    kelp     n depth_max depth_min
 # 1      0  2604      40.0     -14.9
 # 2     1  1190      20.7     -14.3
 
-# Both periods' dataset
-# kelp     n depth_max depth_min
-# 1     0  4399      40.0     -14.9
-# 2     1  2053      26.4     -26.9
+
 kelp_data_with_variables<- kelp_data_with_variables%>%
   filter(coastwide_20m >= -10)%>%
   filter(coastwide_20m <= 40)
@@ -174,18 +141,12 @@ kelp_data_with_variables<- kelp_data_with_variables%>%
 # 1     0  2510      40.0     -9.92 # absences go until 40 m depth
 # 2     1  1183      20.7     -9.69 # presences go until 20.8 m depth, 10 presences were above 10m (in the coast)
 
-# both periods' datasets
-#    kelp     n depth_max depth_min
-# 1     0  4305      40.0     -9.92
-# 2     1  2037      26.4     -9.69
 
 summary(kelp_data_with_variables)
 # write.csv(kelp_data_with_variables, "/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL_M6.csv")
-# write.csv(kelp_data_with_variables, "/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL_M7.csv")
 
-# kelp_data_with_variables<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL_M7.csv")
+# kelp_data_with_variables<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL_M6.csv")
 # kelp_data_with_variables<- kelp_data_with_variables[,-1]
-
 
 #### PERFORM MODELS ############################################################
 # Load necessary libraries
@@ -219,7 +180,7 @@ library(sp)
 
 # ---- Option 2: Compute variogram for one predictor manually ----
 # Example using the first raster layer
-coords<- kelp_data_with_variables[,c("x", "y")]
+coords<- kelp_data_with_variables[,1:2]
   
 predictor<- raster(raster_stack_20m_all[[4]])
 var_data <- data.frame(
@@ -253,18 +214,13 @@ print(paste("Suggested block size (m):", block_size))
 # STEP 1: Balance dataset
 # ================================
 # Keep all presences
-df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL_M7.csv")
+df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/Presence_absences_kelp_variablesSelectedFINAL_M6.csv")
 df<- df[,-1]
-colnames(df)[18]<- "bathymetry_20"
+colnames(df)[16]<- "bathymetry_20"
 
-# Remove absences from period 2020-2022
-df[which(df$period =="2020_2022" & df$kelp == 0), ]<- NA
-
-df<- na.exclude(df)
-  
 # There are much more absences than presence records
 df%>%
-  group_by(kelp, period)%>%
+  group_by(kelp)%>%
   summarize(n= length(kelp))
 # M2:
 # kelp     n
@@ -285,25 +241,36 @@ df%>%
 # 1     0  2510
 # 2     1  1183
 
-# M7
-# kelp period        n
-# 1     0 2014_2019  2509
-# 2     1 2014_2019  1183
-# 3     1 2020_2022   854
-
-
-### Downsample absences to match presence count =====
+# Downsample absences to match presence count
 presences <- df %>% filter(kelp == 1)
 absences <- df %>% filter(kelp == 0) %>% sample_n(nrow(presences))
 
-summary(presences$bathymetry_20)
+summary(presences$bathymetry_20)       
 #     Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-# -9.6917 -0.8142  1.3000  2.3752  4.4972 26.4123 
+# -9.6917 -0.9426  1.1702  2.1877  4.2456 20.6680 
+
+# M3        # M4
+quantile(presences$bathymetry_20, 0.9)  #26.51765  # 8.848001  # 8.145168
+quantile(presences$bathymetry_20, 0.95) #32.6647   # 12.02184  # 11.24392
+quantile(presences$bathymetry_20, 0.93) #30.14825  # 10.56405  # 9.554493
+quantile(presences$bathymetry_20, 0.99) #37.68245  # 17.72347  # 17.48803
+
+df$kelp<- as.factor(df$kelp)
+df.p<- df
+levels(df.p$kelp)<- c("Absence", "Presence")
+
+ggplot(df.p, aes(x=as.factor(kelp), y=bathymetry_20, fill=as.factor(kelp)))+
+  geom_violin()+
+  geom_boxplot(width=0.2)+ 
+  scale_fill_manual(values=c("blue", "green"))+
+  labs(x="", y= "Depth (m)", fill="Kelp Record")+
+  theme_bw()
+
 
 # Combine balanced data
 df_balanced <- bind_rows(presences, absences)
 df_balanced%>%
-  group_by(kelp, period)%>%
+  group_by(kelp)%>%
   summarize(n= length(kelp))
 
 #  M2
@@ -321,43 +288,10 @@ df_balanced%>%
 # 1     0  1183
 # 2     1  1183
 
-# M7
-# kelp period        n
-# 1     0 2014_2019  2037
-# 2     1 2014_2019  1183
-# 3     1 2020_2022   854
-
 ggplot(df_balanced, aes(x=as.factor(kelp), y=bathymetry_20, fill=as.factor(kelp)))+
   geom_violin()+
-  geom_boxplot(width=0.1)+ 
+  geom_boxplot(width=0.2)+ 
   scale_fill_manual(values=c("blue", "green"))+
-  labs(x="", y= "Depth (m)", fill="Kelp Record")+
-  theme_bw()
-
-
-
-### Explore the max depth inhabited by kelp based on Mora-Soto et al (2024) data ====
-                                        # M3        # M4                   # M7
-quantile(presences$bathymetry_20, 0.9)  #26.51765  # 8.848001  # 8.145168  # 8.395664
-quantile(presences$bathymetry_20, 0.95) #32.6647   # 12.02184  # 11.24392  # 11.87806
-quantile(presences$bathymetry_20, 0.93) #30.14825  # 10.56405  # 9.554493  # 10.28292
-quantile(presences$bathymetry_20, 0.97) #                                    14.591 m
-quantile(presences$bathymetry_20, 0.99) #37.68245  # 17.72347  # 17.48803  # 18.35999
-
-df$kelp<- as.factor(df$kelp)
-df.p<- df
-levels(df.p$kelp)<- c("Absence", "Presence")
-
-ggplot(df.p, aes(x=as.factor(kelp), y=bathymetry_20, fill=as.factor(kelp)))+
-  geom_violin()+
-  geom_boxplot(width=0.1)+ 
-  scale_fill_manual(values=c("blue", "green"))+
-  labs(x="", y= "Depth (m)", fill="Kelp Record")+
-  theme_bw()
-
-ggplot(df.p, aes(x= kelp, y=slope_5x5, color=as.factor(kelp)))+
-  geom_violin()+
-  # scale_color_manual(values=c("blue", "green"))+
   labs(x="", y= "Depth (m)", fill="Kelp Record")+
   theme_bw()
 
@@ -382,7 +316,7 @@ test_df$cell<- NA
 train_test_dataset<- rbind(train_df, test_df)
 
 train_test_dataset %>%
-  group_by(set, period, kelp)%>%
+  group_by(set)%>%
   summarize(n= length(set))
 # set       n
 # 1 test    554
@@ -397,129 +331,18 @@ train_test_dataset %>%
 # 2 train  1658
 # write.csv(train_test_dataset, "/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M6.csv")
 
-# M7
-# set   period        n
-# 1 test  2014_2019   942
-# 2 test  2020_2022   280
-# 3 train 2014_2019  2278
-# 4 train 2020_2022   574
 
-
-# write.csv(train_test_dataset, "/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M7.csv")
-
-# train_test_dataset<- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M7.csv")
-# train_test_dataset<- (train_test_dataset[,-1])
-
-train_test_dataset%>%
-  group_by(set, period, kelp)%>%
-  summarize(n= length(kelp))
-# set   period     kelp     n
-# 1 test  2014_2019     0   611
-# 2 test  2014_2019     1   331
-# 3 test  2020_2022     1   280
-# 4 train 2014_2019     0  1426
-# 5 train 2014_2019     1   852
-# 6 train 2020_2022     1   574
-
+# train_test_dataset<- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M6.csv")
+train_test_dataset<- (train_test_dataset[,-1])
 
 colnames(train_test_dataset)
 predictors <- setdiff(
   names(train_test_dataset),
-  c("kelp", "depth","x", "y", "set", "cell", "substrate_aligned", "period", "substrate", "bathymetry_20", "PAR_summer_mean") 
+  c("kelp", "bathymetry_20","x", "y", "set", "cell","Cluster", "substrate_aligned") 
   )
-
-
-train_test_dataset %>%
-  filter(kelp=="1")%>%
-  pivot_longer(cols = all_of(predictors), names_to = "var", values_to = "value") %>%
-  ggplot(aes(x = value, fill = period)) +
-  geom_density(alpha = 0.4) +
-  facet_wrap(~var, scales = "free") +
-  theme_bw()
-
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/variables_values_at_kelpPresence_per_Period.tif", height = 15,
-#        width= 22, units="cm")
-
-
-# Plot density environmental cond at presences and absences
-train_test_dataset %>%
-  pivot_longer(cols = all_of(predictors), names_to = "var", values_to = "value") %>%
-  ggplot(aes(x = value, fill = as.factor(kelp))) +
-  geom_density(alpha = 0.6) +
-  scale_fill_manual(values= c("blue", "green"))+
-  facet_wrap(~var, scales = "free") +
-  theme_bw()
-
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/variables_values_at_kelpPresence_&_Absences.pdf", height = 15,
-#        width= 22, units="cm")
-
-
-library(vegan)   # or stats::prcomp
-summary(train_test_dataset)
-
-train_test_dataset_clean <- train_test_dataset %>%
-  filter(if_all(all_of(predictors), ~ is.finite(.))) %>%
-  drop_na(all_of(predictors))
-summary(train_test_dataset_clean)
-
-# Extract the cleaned environmental matrix
-env_clean <- train_test_dataset_clean %>%
-  dplyr::select(all_of(predictors))
-
-# Run PCA
-p <- prcomp(env_clean, center = TRUE, scale. = TRUE)
-
-# Combine PCA scores with metadata
-scores <- as.data.frame(p$x) %>%
-  bind_cols(train_test_dataset_clean %>% dplyr::select(period))
-
-
-ggplot(scores, aes(x = PC1, y = PC2, color = period)) + geom_point(alpha=0.5)
-
-
-library(ggrepel)
-#  Extract PCA loadings (variable contributions)
-loadings <- as.data.frame(p$rotation[, 1:2]) %>%
-  mutate(var = rownames(p$rotation))
-
-#  Scale loadings to make arrows visible (visual adjustment)
-arrow_scale <- 3  # increase if arrows are too short
-loadings <- loadings %>%
-  mutate(PC1 = PC1 * arrow_scale,
-         PC2 = PC2 * arrow_scale)
-
-#  Plot scores (points) and loadings (arrows)
-ggplot() +
-  geom_point(data = scores, aes(x = PC1, y = PC2, color = period), alpha = 0.5) +
-  geom_segment(
-    data = loadings,
-    aes(x = 0, y = 0, xend = PC1, yend = PC2),
-    arrow = arrow(length = unit(0.2, "cm")), color = "gray40", linewidth = 0.6
-  ) +
-  geom_text_repel(
-    data = loadings,
-    aes(x = PC1, y = PC2, label = var),
-    size = 3.2, color = "black"
-  ) +
-  labs(
-    title = "PCA of Environmental Conditions by Period",
-    x = paste0("PC1 (", round(summary(p)$importance[2, 1] * 100, 1), "%)"),
-    y = paste0("PC2 (", round(summary(p)$importance[2, 2] * 100, 1), "%)"),
-    color = "Period"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "bottom",
-    plot.title = element_text(face = "bold", size = 12)
-  )
-
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/variables_values_at_kelpPresence_per_Period_PCA.tif", height = 15,
-#        width= 15, units="cm")
-
-
 
 # Subset the data to only predictors
-predictors_data <- train_test_dataset %>% dplyr::select(all_of(predictors))
+predictors_data <- train_test_dataset %>% select(all_of(predictors))
 colnames(predictors_data)
 
 # Calculate correlation matrix (use pairwise complete obs to handle NAs)
@@ -539,7 +362,7 @@ predictors <- setdiff(
     "nitrate_summer_minimum"))
 
 # Subset the data to only predictors
-predictors_data <- train_test_dataset %>% dplyr::select(all_of(predictors))
+predictors_data <- train_test_dataset %>% select(all_of(predictors))
 colnames(predictors_data)
 cor_mat <- cor(predictors_data, use = "pairwise.complete.obs")
 
@@ -549,7 +372,7 @@ original_names <- colnames(cor_mat)
 # Define shorter names in the same order
 short_names <- c(  "Mean spring ammonium", 
                    "Mean summer current speed",
-                   # "Mean summer PAR", 
+                   "Mean summer PAR", 
                    "Mean summer SST",    
                    "Mean summer turbidity",
                    "Mean summer SSS",
@@ -562,16 +385,13 @@ colnames(cor_mat) <- short_names
 rownames(cor_mat) <- short_names
 
 
-# pdf("/Volumes/Romina_PSF/PSF/SDM/Plots/correlation_plot_for_SelectedVariablesM7.pdf", width = 10, height = 8)
+pdf("/Volumes/Romina_PSF/PSF/SDM/Plots/correlation_plot_for_SelectedVariablesM6.pdf", width = 10, height = 8)
 corrplot::corrplot(cor_mat, method = "color", type = "upper", 
                    tl.col = "black", tl.srt = 45, addCoef.col = "black", number.cex = 0.7, diag = FALSE)
-# dev.off()
+dev.off()
 
 
-
-
-
-### Scale predictors for GLM and GAM  ==========================================
+### Scale predictors for GLM and GAM
 # Save scaling parameters for using to scale variables in predictions 
 train<- train_test_dataset %>% 
   filter(set== "train")
@@ -581,7 +401,6 @@ test<- train_test_dataset %>%
 
 
 # Function to apply same scaling
-# Function to scale data using precomputed params
 scale_with_params <- function(df, params) {
   df %>%
     mutate(across(where(is.numeric),
@@ -589,15 +408,13 @@ scale_with_params <- function(df, params) {
                     params[[paste0(cur_column(), "_sd")]]))
 }
 
-# Compute scaling parameters correctly (no deprecation warning)
 scaling_params <- train %>%
   summarise(across(where(is.numeric),
-                   list(mean = \(x) mean(x, na.rm = TRUE),
-                        sd   = \(x) sd(x, na.rm = TRUE))))
+                   list(mean = mean, sd = sd), na.rm = TRUE))
 
 
-train <- train %>% dplyr::select(kelp, all_of(predictors))
-test <- test %>% dplyr::select(kelp, all_of(predictors))
+train <- train %>% select(kelp, all_of(predictors))
+test <- test %>% select(kelp, all_of(predictors))
 train$kelp<- as.factor(train$kelp)
 test$kelp <- as.factor(test$kelp)
 
@@ -715,13 +532,11 @@ train.xy<- train_test_dataset %>%
 train.xy$Cluster<- train$cluster
 str(train.xy)
 ggplot(train.xy, aes(y= y, x= x, color=as.factor(Cluster)))+
-  geom_point()+ theme_bw()
+  geom_point()
 
 # -----------------------------
 # 4. Compute cluster weights  
 # -----------------------------
-train[which(train$cluster == 4), "cluster"]<- 1 # all cluster 4 is integrated to cluster 1 (this changes everytime you run the pca so make sure to check the map)
-
 freq <- table(train[which(train$kelp==1), "cluster"])
 inv_freq <- 1 / as.numeric(freq)
 names(inv_freq) <- names(freq)
@@ -753,7 +568,7 @@ library(visreg)     # partial effect plots
 
 
 # Specify the predictors for quadratic terms 
-quad_vars <- colnames(train_scaled_weight)[2:8]
+quad_vars <- colnames(train_scaled_weight)[2:9]
 
 # Build the formula with quadratic terms using I(x^2)
 #    Use I(x^2) rather than poly() so prediction on new data is straightforward.
@@ -766,18 +581,20 @@ glm_mod_s <- glm(glm_formula,
                  family = binomial(link = "logit"),
                  weights = weight)
 
-# glm_formula_It<- kelp ~ ammonium_spring_mean + I(ammonium_spring_mean^2) + currentSpeed_summer_mean + 
-#   I(currentSpeed_summer_mean^2) + temperature_summer_mean + 
-#   I(temperature_summer_mean^2) + turbidity_summer_mean + I(turbidity_summer_mean^2) + 
-#   salinity_summer_mean + I(salinity_summer_mean^2) + slope_5x5 + 
-#   I(slope_5x5^2) + TPI_3x3 + currentSpeed_summer_mean:slope_5x5 
-# 
-# glm_mod_sIt <- glm(glm_formula_It,
-#                  data = train_scaled_weight,
-#                  family = binomial(link = "logit"),
-#                  weights = weight)
 
-summary(glm_mod_sIt)
+library(patchwork)
+vars <- attr(terms(glm_mod_s), "term.labels")
+vars_clean <- vars[!grepl("^I\\(", vars)]
+
+plots <- lapply(vars_clean, function(v) {
+  visreg(glm_mod_s, v, scale = "response", gg = TRUE) + 
+    ggtitle(paste("Effect of", v))
+})
+
+# Combine into one grid
+wrap_plots(plots)
+
+
 
 # Basic summary & multicollinearity check
 summary(glm_mod_s)
@@ -820,22 +637,6 @@ print(vif_vals)
 # 1.385584 
 
 
-#M7 
-#  ammonium_spring_mean     I(ammonium_spring_mean^2)      currentSpeed_summer_mean 
-# 1.774754                      1.776926                      3.694301 
-# I(currentSpeed_summer_mean^2)               PAR_summer_mean          I(PAR_summer_mean^2) 
-# 2.362984                      2.548872                      1.329940 
-# temperature_summer_mean  I(temperature_summer_mean^2)         turbidity_summer_mean 
-# 10.160168                      2.507361                      7.299808 
-# I(turbidity_summer_mean^2)          salinity_summer_mean     I(salinity_summer_mean^2) 
-# 4.010847                     19.617388                      7.369586 
-# slope_5x5                I(slope_5x5^2)                       TPI_3x3 
-# 2.371280                      2.269577                      1.589386 
-# I(TPI_3x3^2) 
-# 1.754806 
-
-
-
 ## GAM
 # ==============================================================================
 gam_formula <- as.formula(paste("kelp ~", paste0("s(", predictors, ")", collapse = " + ")))
@@ -853,25 +654,10 @@ train_weight$kelp <- as.factor(train_weight$kelp)
 rf_mod <-randomForest(x = train_weight[, predictors], y = train_weight$kelp, ntree = 500)
 rf_mod_s <- randomForest(as.formula(paste("kelp ~", paste(predictors, collapse = " + "))),
                          data = train_weight,
-                         ntree = 1500,
+                         ntree = 500,
                          importance = TRUE,
-                         sampsize = floor(0.7 * nrow(train_weight)),  # 70% subsample per tree
-                         # sampsize = nrow(train_weight),
+                         sampsize = nrow(train_weight),
                          case.weights = train_weight$weight)
-
-
-# rf_model_s1 <- randomForest(
-#   as.formula(paste("kelp ~", paste(predictors, collapse = " + "))), 
-#   data = train_weight,            # your data frame
-#   ntree = 1500,                # more trees = stable mean predictions
-#   mtry = 3,                    # fewer variables tried per split
-#   nodesize = 10,               # larger terminal nodes = smoother response
-#   sampsize = floor(0.7 * nrow(train_weight)),  # 70% subsample per tree
-#   replace = TRUE,              # keep bootstrapping (you can try FALSE too)
-#   maxnodes = 40,               # limit maximum nodes per tree
-#   importance = TRUE,
-#   case.weights = train_weight$weight
-# )
 
 # Call:
 #   randomForest(formula = as.formula(paste("kelp ~", paste(predictors,      collapse = " + "))), data = train, ntree = 500, importance = TRUE,      sampsize = nrow(train), case.weights = train$weight) 
@@ -894,20 +680,11 @@ brt_mod_s <- dismo::gbm.step(data = train_brt,
                              gbm.x = which(names(train_brt) %in% predictors),
                              gbm.y = which(names(train_brt) == "kelp"),
                              family = "bernoulli",
-                             tree.complexity = 1,
-                             learning.rate = 0.005,
+                             tree.complexity = 3,
+                             learning.rate = 0.01,
                              bag.fraction = 0.5,
                              site.weights = train_brt$weight)
 
-# brt_mod_s1 <- dismo::gbm.step(data = train_brt,
-#                               gbm.x = which(names(train_brt) %in% predictors),
-#                               gbm.y = which(names(train_brt) == "kelp"),
-#                               family = "bernoulli",
-#                               tree.complexity = 1, # simpler responses than with 3
-#                               learning.rate = 0.005,
-#                               bag.fraction = 0.5,
-#                               site.weights = train_brt$weight,
-#                               n.minobsinnode = 10)      # minimum obs in terminal nodes (prevents tiny splits))
 
 # M3:
 # mean total deviance = 1.386 
@@ -971,37 +748,6 @@ brt_mod_s <- dismo::gbm.step(data = train_brt,
 # elapsed time -  0.44 minutes 
 
 
-# M7 weighted records, including presences from both periods and absences only from period 1.
-# fitting final gbm model with a fixed number of 3800 trees for kelp
-# mean total deviance = 1.386 
-# mean residual deviance = 0.381 
-# 
-# estimated cv deviance = 0.617 ; se = 0.024 
-# 
-# training data correlation = 0.882 
-# cv correlation =  0.786 ; se = 0.006 
-# 
-# training data AUC score = 0.983 
-# cv AUC score = 0.943 ; se = 0.003 
-# 
-# elapsed time -  0.97 minutes 
-
-
-# M8
-# fitting final gbm model with a fixed number of 4200 trees for kelp
-# 
-# mean total deviance = 1.386 
-# mean residual deviance = 0.375 
-# 
-# estimated cv deviance = 0.609 ; se = 0.012 
-# 
-# training data correlation = 0.881 
-# cv correlation =  0.782 ; se = 0.005 
-# 
-# training data AUC score = 0.981 
-# cv AUC score = 0.94 ; se = 0.002 
-# 
-# elapsed time -  0.92 minutes 
 
 # ================================
 # STEP 4: Predictions & Evaluation
@@ -1038,7 +784,7 @@ ggplot(all_curves, aes(x = x, y = fit, color = model)) +
     title = "Predicted response curves for all variables across models"
   )
 
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/ResponseCurves_allVariables_FINAL_M7.pdf", width = 20, height = 17, dpi= 300, units="cm")
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/ResponseCurves_allVariables_FINAL_M4.png", width = 20, height = 17, dpi= 300, units="cm")
 
 
 #-----------------------------
@@ -1071,13 +817,6 @@ results <- bind_rows(
 # 4 brt       0.460 0.963       0.937       0.864 0.801
 
 
-# M7
-# Model Threshold   AUC Sensitivity Specificity   TSS
-# 1 glm       0.548 0.907       0.818       0.816 0.634
-# 2 gam       0.491 0.928       0.867       0.827 0.694
-# 3 rf        0.504 1           1           1     1    
-# 4 brt       0.458 0.983       0.943       0.921 0.865
-
 
 # Pivot the results for plotting
 results_long <- results %>%
@@ -1097,18 +836,6 @@ ggplot(results_long, aes(x = Metric, y = Value, fill = Model)) +
   theme_bw()
 
 
-# Metrics with testing data
-results_test <- bind_rows(
-  get_metrics_optimized(glm_mod_s, test_scaled, "glm"),
-  get_metrics_optimized(gam_mod_s, test_scaled, "gam"),
-  get_metrics_optimized(rf_mod_s, test, "rf"),
-  get_metrics_optimized(brt_mod_s, test, "brt")
-)
-# Model Threshold   AUC Sensitivity Specificity   TSS
-# 1 glm       0.580 0.909       0.805       0.833 0.638
-# 2 gam       0.537 0.917       0.835       0.831 0.666
-# 3 rf        0.567 0.961       0.903       0.884 0.787
-# 4 brt       0.461 0.949       0.900       0.845 0.745
 
 
 # Collect ROC data for each model
@@ -1119,7 +846,6 @@ roc_df <- bind_rows(
   get_roc_data(brt_mod_s,  test, "BRT")
 )
 
-
 # Plot ROC curves
 ggplot(roc_df, aes(x = 1 - Specificity, y = Sensitivity, color = Model)) +
   geom_line(size = 1) +
@@ -1127,7 +853,7 @@ ggplot(roc_df, aes(x = 1 - Specificity, y = Sensitivity, color = Model)) +
   labs(title = "ROC Curves for Model Comparison",
        x = "False Positive Rate (1 - Specificity)",
        y = "True Positive Rate (Sensitivity)") +
-  theme_bw()
+  theme_minimal()
 
 
 
@@ -1162,13 +888,13 @@ p_vars2<- plot_var_importance_v2(models, types,  top_n = 16)
 # Ranking variables and exclude less important ones using a threshold of 10 weighted score
 res <- rank_variables(models, types, avg_threshold = NULL)
 res$summary_table 
-plot_variable_ranking_v2(res$summary_table, threshold = 10)
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots/VariablesImportance_for_SelecBasedOnImp_M7.pdf", width = 15, height = 13, dpi= 300, units="cm")
+plot_variable_ranking_v2(res$summary_table, threshold = 20)
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/plots/VariablesImportance_for_SelecBasedOnImp_M4.pdf", width = 15, height = 13, dpi= 300, units="cm")
 
 
-plot_importance_profiles_v2(res$summary_table, threshold=10)
+plot_importance_profiles_v2(res$summary_table, threshold=18)
 # ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/VariablesImportance_profile_VarsSelection_FINAL6.png", width = 18, height = 12, dpi= 300, units="cm")
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/VariablesImportance_profile_VarsSelection_FINALM7.pdf", width = 18, height = 12, dpi= 300, units="cm")
+# ggsave("/Volumes/Romina_PSF/PSF/SDM/Plots/VariablesImportance_profile_VarsSelection_FINAL6.pdf", width = 18, height = 12, dpi= 300, units="cm")
 
 
 
@@ -1177,10 +903,10 @@ plot_importance_profiles_v2(res$summary_table, threshold=10)
 # ==============================================================================
 # STEP 7: SDMs with selected variables 
 # ==============================================================================
-setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M7_weightedPres")
-thresh= 10
+setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M6_weightedPres")
+thresh= 18
 
-vars_selected <- rank_variables(models, types, avg_threshold = 10)
+vars_selected <- rank_variables(models, types, avg_threshold = 18)
 vars_selected <- vars_selected$summary_table$Variable
 
 # vars_selected
@@ -1195,14 +921,10 @@ vars_selected <- vars_selected$summary_table$Variable
 # [1] "temperature_summer_mean"  "turbidity_summer_mean"    "slope_5x5"                "salinity_summer_mean"     "ammonium_spring_mean"    
 # [6] "PAR_summer_mean"          "currentSpeed_summer_mean"
 
-# M7
-# "turbidity_summer_mean"    "temperature_summer_mean"  "PAR_summer_mean"         
-# [4] "salinity_summer_mean"     "slope_5x5"                "currentSpeed_summer_mean"
-# [7] "ammonium_spring_mean"
 
 # Refit models using only selected vars
-train_sel <- train_weight %>% dplyr::select(all_of(c("kelp", vars_selected)))
-test_sel <- test %>% dplyr::select(all_of(c("kelp", vars_selected)))
+train_sel <- train_weight %>% select(all_of(c("kelp", vars_selected)))
+test_sel <- test %>% select(all_of(c("kelp", vars_selected)))
 
 train_sel$kelp<- as.factor(train_sel$kelp)
 
@@ -1217,92 +939,11 @@ test_sel_scaled  <- scale_with_params(test_sel,  scaling_params_2)
 K <-  5  # <-- set number of clusters
 env_pres <- train_sel_scaled 
 set.seed(42)
-cl <- kmeans(env_pres[,2:8], centers = K, nstart = 25)
+cl <- kmeans(env_pres, centers = K, nstart = 25)
 
 # assign cluster IDs back to full dataset (presences + absences)
 train_sel_scaled$cluster <- NA
 train_sel_scaled$cluster<- cl$cluster
-
-# assign cluster to testing points
-predict_kmeans <- function(kmod, newdata, 
-                           train_for_scaling = NULL, 
-                           center = NULL, scale_values = NULL, 
-                           do_scale = FALSE, 
-                           na.action = c("error","omit")) {
-  # kmod: object returned by stats::kmeans (must have $centers)
-  # newdata: data.frame or matrix with same variables (same order) as used to fit kmod
-  # train_for_scaling: optional training data (used to compute center/scale if do_scale=TRUE and center/scale_values not supplied)
-  # center/scale_values: numeric vectors of length p (optional alternative to train_for_scaling)
-  # do_scale: logical; if TRUE will scale newdata and centers using provided or derived center/scale
-  # na.action: "error" (default) or "omit" (will drop rows with NA and return NA for them)
-  
-  # --- checks & coercions
-  if (is.null(kmod$centers)) stop("kmod must be a kmeans object with $centers.")
-  centers <- as.matrix(kmod$centers)                # k x p
-  if (is.data.frame(newdata)) newmat <- as.matrix(newdata)
-  else newmat <- as.matrix(newdata)
-  if (!is.numeric(newmat)) stop("newdata must be numeric (no factors/characters).")
-  
-  p_centers <- ncol(centers)
-  p_new <- ncol(newmat)
-  if (p_centers != p_new) stop(sprintf("Dim mismatch: centers have %d cols but newdata has %d cols.", p_centers, p_new))
-  
-  na.action <- match.arg(na.action)
-  if (na.action == "omit") {
-    nas <- apply(newmat, 1, function(r) any(is.na(r)))
-    newmat_na <- newmat
-    newmat <- newmat[!nas, , drop = FALSE]
-  } else {
-    if (any(is.na(newmat))) stop("newdata contains NA values; set na.action='omit' or impute before calling.")
-  }
-  
-  # --- scaling if requested
-  if (do_scale) {
-    if (is.null(center) || is.null(scale_values)) {
-      if (is.null(train_for_scaling)) stop("When do_scale=TRUE provide either center/scale_values or train_for_scaling.")
-      trainm <- as.matrix(train_for_scaling)
-      if (ncol(trainm) != p_new) stop("train_for_scaling must have same columns/order as newdata/centers.")
-      center <- colMeans(trainm, na.rm = TRUE)
-      scale_values <- apply(trainm, 2, sd, na.rm = TRUE)
-      scale_values[scale_values == 0] <- 1    # avoid division by zero
-    }
-    # apply scaling to both new data and centers (centers are in the same space as training)
-    newmat <- sweep(newmat, 2, center, FUN = "-")
-    newmat <- sweep(newmat, 2, scale_values, FUN = "/")
-    centers <- sweep(centers, 2, center, FUN = "-")
-    centers <- sweep(centers, 2, scale_values, FUN = "/")
-  }
-  
-  # --- efficient squared Euclidean distance calc
-  # D_ij = sum_k (x_i_k - c_j_k)^2 = sum_k x_i_k^2 + sum_k c_j_k^2 - 2 * x_i %*% t(c_j)
-  X2 <- rowSums(newmat * newmat)
-  C2 <- rowSums(centers * centers)
-  # tcrossprod gives X %*% t(C)
-  # D is n x k
-  D <- outer(X2, C2, "+") - 2 * tcrossprod(newmat, centers)
-  
-  # numerical safety (tiny negatives due to floating point)
-  D[D < 0 & D > -1e-12] <- 0
-  
-  # get index of min distance (max.col on -D is fast)
-  clusters_assigned <- max.col(-D, ties.method = "first")
-  
-  # create output with NA rows if needed
-  if (exists("nas") && any(nas)) {
-    out <- rep(NA_integer_, length(nas))
-    out[!nas] <- clusters_assigned
-    clusters_assigned <- out
-  }
-  
-  return(clusters_assigned)
-}
-
-
-
-test_sel_scaled$cluster<-  predict_kmeans(cl, test_sel_scaled[,2:8], train_for_scaling = train, do_scale = F)
-summary(as.factor(test_sel_scaled$cluster))
-# 1   2   3   4   5 
-# 146 197 327 447 105 
 
 
 # Visualize in biplot:
@@ -1327,37 +968,18 @@ ggplot(pca_scores, aes(x = PC1, y = PC2, color = cluster)) +
 factoextra::fviz_pca_biplot(pca_res,
                 label = "var",       # show variable names
                 habillage = train_sel_scaled$cluster, # color by cluster
-                addEllipses = F,  # optional: confidence ellipse
+                addEllipses = TRUE,  # optional: confidence ellipse
                 ellipse.level = 0.95,
                 palette = "Set1")
 
 
-# Plot points in map
 train.xy<- train_test_dataset %>% 
   filter(set== "train")
 
 train.xy$Cluster<- train_sel_scaled$cluster
 str(train.xy)
-
-train_map<- ggplot(train.xy, aes(y= y, x= x, color=as.factor(Cluster)))+
-  geom_point()+ theme_bw()+ 
-  labs(title = "Training records (70%)", fill= "Env. Cluster")
-
-test.xy<- train_test_dataset %>% 
-  filter(set== "test")
-
-test.xy$Cluster<- test_sel_scaled$cluster
-testing_map<- ggplot(test.xy, aes(y= y, x= x, color=as.factor(Cluster)))+
-  geom_point()+ 
-  labs(title = "Testing records (30%)", color= "Env. Cluster")+ 
-  theme_bw()
-
-cowplot::plot_grid(train_map, testing_map)
-
-# merge cluster 4 with 5 because 4 has few records and is widely distributed
-# Carfull that every run of the kmeans give different order of cluster numbers 
-train_sel_scaled[which(train_sel_scaled$cluster==4), "cluster"]<- 1 
-test_sel_scaled[which(test_sel_scaled$cluster==4), "cluster"]<- 1 #
+ggplot(train.xy, aes(y= y, x= x, color=as.factor(Cluster)))+
+  geom_point()
 
 # Compute cluster weights  
 # raw weights for presences
@@ -1376,25 +998,18 @@ pres_weights <- pres_weights * (length(pres_weights) / sum(pres_weights))
 # add weights to dataset
 train_sel_scaled$weight <- 1
 train_sel_scaled$weight[train_sel_scaled$kelp == 1] <- pres_weights
-head(train_sel_scaled)
-
 
 train_sel$weight <- 1
 train_sel$weight[train_sel$kelp == 1] <- pres_weights
-head(train_sel)
 
-
-train.xy$weight <- 1
-train.xy$weight[train.xy$kelp == 1] <- pres_weights
-head(train.xy)
 
 # ==============================================================================
-setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M7_weightedPres")
-
-# write.csv(train.xy, "train_selected_table_FINALMODELS_M7.csv")
-# write.csv(test.xy, "test_selected_table_FINALMODELS_M7.csv")
-# write.csv(test_sel_scaled, "test_selected_scaled_table_FINALMODELS.csv")
+setwd("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M6_weightedPres")
+# write.csv(train_sel, "train_selected_table_FINALMODELS.csv")
 # write.csv(train_sel_scaled, "train_selected_scaled_table_FINALMODELS.csv")
+# write.csv(test_sel, "test_selected_table_FINALMODELS.csv")
+# write.csv(test_sel_scaled, "test_selected_scaled_table_FINALMODELS.csv")
+
 
 ## GLM
 quad_vars_sel <- quad_vars[quad_vars %in% vars_selected]
@@ -1405,7 +1020,7 @@ glm_mod_se <- glm(glm_formula,
                  family = binomial,
                  weights = weight)
 
-# saveRDS(glm_mod_se, "glm_mod_s.rds")
+saveRDS(glm_mod_se, "glm_mod_s.rds")
 
 ## GAM
 gam_formula <- as.formula(paste("kelp ~", paste0("s(", vars_selected, ")", collapse = " + ")))
@@ -1414,7 +1029,7 @@ gam_mod_se <- gam(gam_formula,
                  family = binomial,
                  weights = weight)
 
-# saveRDS(gam_mod_se, "gam_mod_s.rds")
+saveRDS(gam_mod_se, "gam_mod_s.rds")
 
 ## Random Forest
 train_sel$kelp <- as.factor(train_sel$kelp)
@@ -1422,17 +1037,10 @@ rf_mod_se <- randomForest(as.formula(paste("kelp ~", paste(vars_selected, collap
                          data = train_sel,
                          ntree = 500,
                          importance = TRUE,
-                         sampsize = floor(0.7 * nrow(train_weight)),  # 70% subsample per tree NEW
-                         # ntree = 500,       # M7 
-                         # importance = TRUE, # M7 
-                         # sampsize = nrow(train_sel), # M7
+                         sampsize = nrow(train_sel),
                          case.weights = train_sel$weight)
 
-# saveRDS(rf_mod_se, "rf_mod_s.rds")
-
-library(pdp)
-varImpPlot(rf_mod_se) 
-
+saveRDS(rf_mod_se, "rf_mod_s.rds")
 
 ## BRT
 train_brt_sel <- train_sel# %>% select(-env_cluster)
@@ -1442,12 +1050,12 @@ brt_mod_se <- dismo::gbm.step(data = train_brt_sel,
                              gbm.x = which(names(train_brt_sel) %in% vars_selected),
                              gbm.y = which(names(train_brt_sel) == "kelp"),
                              family = "bernoulli",
-                             tree.complexity = 1,  # M7 = 3
-                             learning.rate = 0.005, # M7 = 0.01
+                             tree.complexity = 3,
+                             learning.rate = 0.01,
                              bag.fraction = 0.5,
                              site.weights = train_brt_sel$weight)
 
-# saveRDS(brt_mod_se, "brt_mod_s.rds")
+saveRDS(brt_mod_se, "brt_mod_s.rds")
 
 # fitting final gbm model with a fixed number of 2750 trees for kelp
 # 
@@ -1527,37 +1135,8 @@ brt_mod_se <- dismo::gbm.step(data = train_brt_sel,
 # elapsed time -  0.33 minutes 
 
 
-# M7 weighted presences with merged presences from both periods and only 2014-2019 absences
-# fitting final gbm model with a fixed number of 4650 trees for kelp
-# 
-# mean total deviance = 1.386 
-# mean residual deviance = 0.359 
-# 
-# estimated cv deviance = 0.601 ; se = 0.022 
-# 
-# training data correlation = 0.889 
-# cv correlation =  0.793 ; se = 0.011 
-# 
-# training data AUC score = 0.984 
-# cv AUC score = 0.946 ; se = 0.005 
-# 
-# elapsed time -  0.02 minutes 
-
-# save.image("3.1.HSModeling_multi_approaches_M7.RData")
 
 
-# M8 
-# fitting final gbm model with a fixed number of 50 trees for kelp
-# 
-# mean total deviance = 0 
-# mean residual deviance = 0 
-# 
-# estimated cv deviance = 0 ; se = 0 
-# 
-# training data correlation = 0.611 
-# cv correlation =  0.599 ; se = 0.013 
-# 
-# training data AUC score = 0.85 
-# cv AUC score = 0.843 ; se = 0.01 
-# 
-# elapsed time -  0.08 minutes 
+# save.image("3.1.HSModeling_multi_approaches_M6.RData")
+
+
