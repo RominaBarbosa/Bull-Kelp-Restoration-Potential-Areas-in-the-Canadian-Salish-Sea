@@ -1,8 +1,8 @@
 ###=============================================================================
 ###     NEMO model - SalishSeaCast Variables INTERPOLATION      ################
 ###                                                             ################
-### input data acquired with: "2.2.4.Variables_correlation_all" ################
-### and "1.2.3.Climatology_metrics_Xperiod.R"                   ################
+### input data acquired with: "Variables_correlation_all" ################
+### and "1.4.Climatology_metrics_Xperiod.R"                   ################
 ### input data: selected variable metrics (climatology)         ################
 ### output data:1- rasters of variables  (metrics)              ################
 ###             2- 20 m resolution multiraster (terra) of variables ############
@@ -30,7 +30,7 @@ selected_variables<- c("ammonium_spring_mean",
 
 
 # Upload variables from the SalishSeaCast model and merge 
-my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_post_blob")
+my_path<-("/modeled_variables_original/climatology_metrics_post_blob")
 # my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_metrics_blob_")
 setwd(my_path)
 dir()
@@ -126,12 +126,11 @@ colnames(selected_variables_df)
 # [11] "temperature_summer_mean"  "turbidity_summer_mean"
 
 ###++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++###
-# write.csv(selected_variables_df, "/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_FINALM6.csv")
-# write.csv(selected_variables_df, "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M6/selected_variables_to_interpolations_postBlob.csv") # 19 Sep 2025
+# write.csv(selected_variables_df, "/SDM/SDM_predict_postBlob/selected_variables_to_interpolations_postBlob.csv") # 19 Sep 2025
 
 
 ## Add temperature variables
-my_path<-("/Volumes/Romina_PSF/PSF/modeled_variables_original/climatology_temp_tolerance_metrics")
+my_path<-("/modeled_variables_original/climatology_temp_tolerance_metrics")
 setwd(my_path)
 files <- list.files(path = my_path, pattern = "\\.csv$", full.names = TRUE) # 32 files
 files
@@ -165,11 +164,11 @@ library(dplyr)
 library(terra)
 
 # Load input data
-bathy <- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/bathy_coastwide_500m.tif")
+bathy <- rast("/SDM/environmental_layers/Topographic_Variables/bathy_coastwide_500m.tif")
 # output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interpolated_Blob"
 # variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/Variables_selection/selected_variables_to_interpolations_FINALM6.csv")
-variables_df <- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M6/selected_variables_to_interpolations_postBlob.csv")
-output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interpolated_postBlob"
+variables_df <- read.csv("/SDM/SDM_predict_postBlob/M6/selected_variables_to_interpolations_postBlob.csv")
+output_path<- "/SDM/environmental_layers/SalishSeaCast_interpolated_postBlob"
 variables_df<- variables_df[,-1] 
 colnames(variables_df)
 
@@ -268,7 +267,7 @@ names(raster_stack) <- layer_names
 raster_stack <- raster_stack[[selected_variables]]
 
 # Load your bathymetry raster (20m resolution)
-bathymetry_20m<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
+bathymetry_20m<- rast("/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
 
 # Resample 500m raster stack to 20m grid using bathymetry as template
 # method = "bilinear" or "near" (nearest neighbor, for categorical)
@@ -279,16 +278,14 @@ print(raster_stack_20m)
 plot(raster_stack_20m[[1]])  # plot first layer
 
 # Save raster stack of resampled variables at 20 m resolution
-terra::writeRaster(raster_stack_20m, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif",
+terra::writeRaster(raster_stack_20m, "/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif",
                    overwrite=TRUE)
-# terra::writeRaster(raster_stack_20m, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_resolution_postBlob.tif",
-#                    overwrite=TRUE)
 
 
 
 # ###=============================================================================
 # ### Interpolate tidal current from Foreman model ===============================
-# tidal_current_pts<- st_read("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Foreman RMS Tidal Model/Foreman_rms_tidal.shp")
+# tidal_current_pts<- st_read("/SDM/environmental_layers/Foreman RMS Tidal Model/Foreman_rms_tidal.shp")
 # 
 # # Reproject to match your bathymetry raster (assuming EPSG:3005)
 # points_sf <- st_transform(tidal_current_pts, crs = 3005)
@@ -307,7 +304,7 @@ terra::writeRaster(raster_stack_20m, "/Volumes/Romina_PSF/PSF/SDM/environmental_
 # # Plot or save
 # plot(idw_raster, main= paste("interpolation:", "RMS_Tidal_"))
 # 
-# output_path<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Foreman RMS Tidal Model"
+# output_path<- "/SDM/environmental_layers/Foreman RMS Tidal Model"
 # # writeRaster(idw_raster[[1]], paste(output_path, paste("RMS_Tidal" , "interpolated.tif", sep="_"), sep="/"), overwrite = TRUE)
 
 

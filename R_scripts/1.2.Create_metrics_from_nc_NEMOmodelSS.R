@@ -26,17 +26,9 @@ library(abind)
 
 
 ## Set Paths ===================================================================
-# input_path= "Y:/Romina/Monthly_nc"
-# input_path= "Y:/Romina/Montly_nc_midwater5m"
-input_path= "D:/PSF/modeled_variables_original/Monthly_nc"
-
-#input_path= "/Volumes/Romina_PSF/PSF/modeled_variables_original/Monthly_nc"
+input_path= "/modeled_variables_original/Monthly_nc"
 setwd(input_path)
-dir()
-
-# output_path=  "F:/PSF/modeled_variables_original/seasonal_metrics_0.5m"
-output_path= "Volumes/Romina_PSF/modeled_variables_original/seasonal_metrics_0.5m_depth"
-
+output_path=  "/modeled_variables_original/seasonal_metrics_0.5m"
 path_bathy= "Volumes/Romina_PSF/modeled_variables_original"
 
 
@@ -52,12 +44,7 @@ source(paste("/Volumes/Romina_PSF/PSF/R_scripts/functions","RFunction_calculate_
 years<- c("2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024")
 # variables<- c("ammonium", "uVelocity", "total_alkalinity")# vVelocity, "u_wind","turbidity",  "salinity", "nitrate", 
 variables<- c( "PAR") #"PAR", "u_wind",
-season<- c( "fall", "spring", "winter", "summer") #
-  
-# "finished 2014 ; dissolved_inorganic_carbon 2025-03-24 18:06:33.594026"
-# years<- c("2022")
-# variables<- c("temperature")
-# season<- c("spring")
+season<- c( "fall", "spring", "winter", "summer") 
 
 
 for (v in 1:length(variables)) {
@@ -84,13 +71,6 @@ for (v in 1:length(variables)) {
     }
   }
 }
-
-
-# To process: 
-# seasonal metrics of SST 2022, 2023, 2024
-# metrics for turbidity 2015
-
-
 
 
 
@@ -168,16 +148,13 @@ for (v in 1:length(variables)) {
 
 
 
-
-
-
-
-
-
+## ===================================================================
+## Calculate cumulated degrees above temperature threshold metric
+## ===================================================================
 
 # Steps:
-# Set the threshold (e.g., 15°C).
-# Filter the temperature values above the threshold (15°C).
+# Set the threshold (e.g., 18°C).
+# Filter the temperature values above the threshold (18°C).
 # Calculate the cumulated degrees: This is the sum of the temperatures that are above the threshold for each location.
 # Count the number of hours: This is the number of time steps where the temperature exceeds the threshold for each location.
 
@@ -186,11 +163,10 @@ for (v in 1:length(variables)) {
 # With dimensions (time, latitude, longitude)
 
 bathy_file= paste(path_bathy, "ubcSSnBathymetryV21-08_d0bf_13e6_3a75.csv", sep="/")
-calculate_DegreeHours_Hours_OverThreshold<- function(data= merged_spring_data$merged_data, threshold_temp= 12, bathy_file=bathy_file){
+calculate_DegreeHours_Hours_OverThreshold<- function(data= merged_spring_data$merged_data, threshold_temp= 18, bathy_file=bathy_file){
   
   # Step 1: Set the threshold temperature (e.g., 15°C)
-  # threshold_temp <- 15
-  
+  # threshold_temp <- 18
   
   # Step 2: Initialize matrices to store the cumulated temperature and number of hours
   cumulated_degrees <- matrix(NA, nrow = (dim(data)[1]), ncol = (dim(data)[2]))
@@ -269,14 +245,8 @@ calculate_DegreeHours_Hours_OverThreshold<- function(data= merged_spring_data$me
 
 
 
-
-
-output_path= "C:/Users/romi_/OneDrive - University of Victoria/Romina_personal/PSF/SDM"
-write.csv(cumulated_degrees_df, paste(output_path, "spring_2021_degreeHours15.csv", sep="/"))
-write.csv(num_hours_above_threshold_df, paste(output_path, "spring_2021_hours_above15.csv", sep="/"))
-
-
-
+# output_path= "/SDM"
+# write.csv(num_hours_above_threshold_df, paste(output_path, "spring_2021_hours_above18.csv", sep="/"))
 
 
 
@@ -310,35 +280,11 @@ if (any(cumulated_degrees_df$longitude < -180 | cumulated_degrees_df$longitude >
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-path_data<- "E:/Pacific_Salmon_Fundation"
+## ===================================================================
+## Convert month metrics into seasonal metrics
+## ===================================================================
+### Add coordinates to the metrics =============================================
+path_data<- "path_name"
 
 bathy_grid<-  read.csv(paste(path_data, "modeled_variables_original/ubcSSnBathymetryV21-08_d0bf_13e6_3a75.csv", sep="/"))
 head(bathy_grid)
@@ -351,12 +297,9 @@ bathy_grid<- bathy_grid[,c("gridY", "gridX", "latitude", "longitude")]
 # data<- data[-1,]
 # colnames(data)
 data<- data[,c("time", "gridY", "gridX", "salinity", "temperature")]
-
-
 data<- merge(data, bathy_grid, by= c("gridY", "gridX"))
 head(data)
 rm(bathy_grid)
-
 colnames(data)[3]<- "date"
 colnames(data)[6:7]<- c("lat", "lon") 
 data$lon<- as.numeric(data$lon)
@@ -364,8 +307,6 @@ data$lat<- as.numeric(data$lat)
 data$temperature<- as.numeric(data$temperature)
 data$salinity<- as.numeric(data$salinity)
 str(data)
-
-
 data<- data%>% filter(!is.na(salinity))
 
 
@@ -389,11 +330,6 @@ data<- data%>% filter(!is.na(salinity))
 #   temperature_array[date_idx, lat_idx, lon_idx] <- data$temperature[i]
 # }
 
-
-
-# Load required libraries
-library(dplyr)
-library(lubridate)
 
 # Convert the date column to Date object and extract month
 data$date <- as.POSIXct(data$date, format="%Y-%m-%dT%H:%M:%SZ", tz="UTC")
@@ -540,7 +476,7 @@ max_lat = max(data$lat)
 
 
 
-
+### Rasterize the seasonal variable metrics ====================================
 
 for (i in 2:length(i_time)) {
   data_i<- data[which(data$date == i_time[i]),]
@@ -570,553 +506,3 @@ for (i in 2:length(i_time)) {
   
 }
 
-
-### Separate in months to calculate monthly metrics ============================
-
-start <- "202--01-15 00:00:00"
-end <- "2025-01-15 00:00:00"
-start.time.num <- as.numeric(as.chron(start))
-
-# +1 means one month.  Use +12 if you want one year.
-end.time.num <- as.numeric(as.chron(paste(mondate(start)+1, start)))
-
-# 1/24 means one hour.  Change as needed.
-hours <- as.chron(seq(start.time.num, end.time.num, 1/24))
-as.chron(seq(from=start, by=interval*60, to=end))
-
-set.seed(1);
-R <- dim(no3.array)[1];
-C <- dim(no3.array)[2];
-Z <- dim(no3.array)[3];
-N <- R*C*Z;
-
-# end<-  ymd("2023-05-01")
-
-
-# mean_metric <- tapply(no3.array,list(rep(1:R,C*Z),rep(1:C,each=R,times=Z),rep(strftime(dates,'%m'),each=R*C)),mean)
-
-df<- data.frame(matrix(nrow = 16, ncol = 2))
-colnames(df)<- c("month", "hours_count")
-df$month<- c(seq(1, 12, 1), seq(1,4,1))
-df$day<- rep(1, 16)
-df$year<- c(rep(2022,12), rep(2023, 4))
-df$start_time<- "00:00"
-df$start<- ymd_hm(paste(df$year, df$month, df$day, df$start_time))
-df$first_hour_num<- NA
-df[1,"first_hour_num"]<- 1
-df$last_hour_num<- NA
-df[1,"first_hour_num"]<- 1
-
-# no3_metrics<- array(data= NA, dim = c(dim(no3.array)[1], dim(no3.array)[2], 12))
-# no3_metrics<- list()
-
-start <- as.POSIXct("2022-01-01")
-end <- as.POSIXct("2023-05-01")
-
-time_hour<- seq(from=start, by=interval*60, to=end)
-
-df$start_time <- c(which(time_hour == "2022-01-01 00:00:00 UTC"), which(time_hour == "2022-02-01 00:00:00 UTC"),
-                   which(time_hour == "2022-03-01 00:00:00 UTC"), which(time_hour == "2022-04-01 00:00:00 UTC"),
-                   which(time_hour == "2022-05-01 00:00:00 UTC"), which(time_hour == "2022-06-01 00:00:00 UTC"),
-                   which(time_hour == "2022-07-01 00:00:00 UTC"), which(time_hour == "2022-08-01 00:00:00 UTC"),
-                   which(time_hour == "2022-09-01 00:00:00 UTC"), which(time_hour == "2022-10-01 00:00:00 UTC"),
-                   which(time_hour == "2022-11-01 00:00:00 UTC"), which(time_hour == "2022-12-01 00:00:00 UTC"),
-                   which(time_hour == "2023-01-01 00:00:00 UTC"), which(time_hour == "2023-02-01 00:00:00 UTC"),
-                   which(time_hour == "2023-03-01 00:00:00 UTC"), which(time_hour == "2023-03-01 00:00:00 UTC"))
-
-df$end_time <- c(which(time_hour == "2022-02-01 00:00:00 UTC"),
-                 which(time_hour == "2022-03-01 00:00:00 UTC"), which(time_hour == "2022-04-01 00:00:00 UTC"),
-                 which(time_hour == "2022-05-01 00:00:00 UTC"), which(time_hour == "2022-06-01 00:00:00 UTC"),
-                 which(time_hour == "2022-07-01 00:00:00 UTC"), which(time_hour == "2022-08-01 00:00:00 UTC"),
-                 which(time_hour == "2022-09-01 00:00:00 UTC"), which(time_hour == "2022-10-01 00:00:00 UTC"),
-                 which(time_hour == "2022-11-01 00:00:00 UTC"), which(time_hour == "2022-12-01 00:00:00 UTC"),
-                 which(time_hour == "2023-01-01 00:00:00 UTC"), which(time_hour == "2023-02-01 00:00:00 UTC"),
-                 which(time_hour == "2023-03-01 00:00:00 UTC"), which(time_hour == "2023-03-01 00:00:00 UTC"),
-                 which(time_hour == "2023-05-01 00:00:00 UTC"))
-
-calc_monthly_metrics<- function(data= no3.array, metric= "max", df= df){
-  
-  no3_month_1<- no3.array[,, 1:  df$end_time[1]]
-  # save this data in a raster. Note that we provide the coordinate reference system “CRS” in the standard well-known text format. For this data set, it is the common WGS84 system.
-  # We will need to transpose and flip to orient the data correctly. The best way to figure this out is through trial and error, but remember that most netCDF files record spatial data from the bottom left corner.
-  no3_month_m1<- flip(raster(t(as.matrix(apply(no3_month_1,c(1,2),metric))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-  names(no3_month_m1)<- paste("NO3", df$month[1], df$year[1], metric, sep="_")
-  # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-  # colnames(csv_file)<- c("NO3", "lat", "lon")
-  # csv_file$NO3<- c(as.matrix(apply(no3_month_1,c(1,2),metric)))
-  # # csv_file[is.na(csv_file$NO3), "NO3"]<- 9999
-  # csv_file$lon<- c(lon)
-  # csv_file$lat<- c(lat)  
-  # csv_file$NO3<- as.numeric(csv_file$NO3)
-  # csv_file<- csv_file%>%
-  #   filter(!is.na(NO3))
-  # name<- paste(names(no3_month_m1), ".csv", sep="")
-  # write.csv(csv_file, paste(output_path, name, sep="/"))
-  
-  
-  no3_month_2<- no3.array[,, 2:  df$end_time[2]]
-  no3_month_m2<- flip(raster(t(as.matrix(apply(no3_month_2,c(1,2),metric))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-  names(no3_month_m2)<- paste("NO3", df$month[2], df$year[1], metric, sep="_")
-  # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-  # colnames(csv_file)<- c("NO3", "lat", "lon")
-  # csv_file$NO3<- c(as.matrix(apply(no3_month_2,c(1,2),metric)))
-  # # csv_file[is.na(csv_file$NO3), "NO3"]<- 9999
-  # csv_file$lon<- c(lon)
-  # csv_file$lat<- c(lat)  
-  # csv_file$NO3<- as.numeric(csv_file$NO3)
-  # csv_file<- csv_file%>%
-  #   filter(!is.na(NO3))
-  # name<- paste(names(no3_month_m2), ".csv", sep="")
-  # write.csv(csv_file, paste(output_path, name, sep="/"))
-  
-  no3_metrics<- stack(no3_month_m1, no3_month_m2)
-  
-  for (m in 3:16) {
-    df_m<- df[m,]
-    start<- df_m$start
-    # end.time.num <- as.numeric(as.chron(paste(mondate(start)+1, start)))# +1 means one month. 
-    end.time <- mondate(start)+1# +1 means one month. 
-    n_hours<- length(seq(from=start, by=interval*60, to= as.POSIXct(end.time)-2))
-    
-    
-    no3_month<- no3.array[,, df_m$start_time:  df_m$end_time]
-    no3_month_m<- flip(raster(t(as.matrix(apply(no3_month,c(1,2),paste(metric)))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-    names(no3_month_m)<- paste("NO3", df$month[m], df$year[m], metric, sep="_")
-    no3_metrics<- stack(no3_metrics, no3_month_m)
-    
-    ## no3<- as.data.frame(c(apply(no3_month,c(1,2),paste(metric))))
-    # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-    # colnames(csv_file)<- c("NO3", "lat", "lon")
-    # csv_file$NO3<- c(apply(no3_month, c(1, 2), paste(metric)))
-    # csv_file$lon<- c(lon)
-    # csv_file$lat<- c(lat)  
-    # 
-    # csv_file$NO3<- as.numeric(csv_file$NO3)
-    # csv_file<- csv_file%>%
-    #   filter(!is.na(NO3))
-    # name<- paste(names(no3_month_m), ".csv", sep="")
-    # write.csv(csv_file, paste(output_path, name, sep="/"))
-    
-  }
-  return(no3_metrics)
-}
-
-plot(no3_metrics)
-
-max_metrics<- calc_monthly_metrics(data= no3.array, metric= "max", df= df)
-min_metrics<- calc_monthly_metrics(data= no3.array, metric= "min", df= df)
-mean_metrics<- calc_monthly_metrics(data= no3.array, metric= "mean", df= df)
-sd_metrics<- calc_monthly_metrics(data= no3.array, metric= "sd", df= df)
-
-plot(max_metrics[[1:12]])#
-plot(min_metrics[[1:12]])
-plot(mean_metrics[[1:12]])
-plot(sd_metrics[[1:12]])#NO3_sd_2022
-
-plot(max_metrics[[13:16]])#
-plot(min_metrics[[13:16]])
-plot(mean_metrics[[13:16]])
-plot(sd_metrics[[13:16]])#NO3_sd_2022
-
-
-output_path<- "C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/metrics_NO3"
-setwd(paste(output_path))
-# terra::writeRaster(max_metrics, "max_metrics.tif", overwrite=TRUE)
-
-stack_NO3<- stack(max_metrics,min_metrics,mean_metrics,sd_metrics)
-terra::writeRaster(stack_NO3, "C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/SDMs/layers/processed_layers/NO3_stacklayers2.tif", overwrite=TRUE)
-
-
-# # ============================================================================##
-## Plot metric function ========================================================
-
-plot_metrics<- function(metrics_stack= max_metrics){
-  # obtain max and min values
-  # maxv <- max(maxValue(metrics_stack), na.rm = T)+1
-  # minv <- min(minValue(metrics_stack), na.rm = T)
-  maxv <- 25
-  minv <- 0
-  
-  # set the breaks between min and max values
-  brks <- seq(minv,maxv,by=0.1)
-  nbrks <- length(brks)-1
-  r.range <- c(minv, maxv)
-  
-  # generate palette
-  colfunc<-colorRampPalette(c("springgreen", "royalblue", "yellow", "red"))
-  
-  # par(mfrow=c(4,3))
-  for(i in 1:12) {# seq_len(nlayers(metrics_stack))){
-    tmp <- metrics_stack[[i]]
-    plot(tmp, breaks=brks,col=colfunc(nbrks), legend = F, zlim=c(minv,maxv),
-         main = names(tmp)) 
-    plot(metrics_stack[[i]], legend.only=TRUE, col=colfunc(nbrks),
-         legend.width=1, legend.shrink=0.75,
-         legend.args=list(text='value', side=4, font=2, line=2.5, cex=0.8))
-  }
-  
-  
-}
-
-
-
-
-
-################################################################################
-## Process second timeseries to calculate monthly metrics 2023 =================
-## barbosa0_surf_2023.05.10_2023.12.31
-nc_data <- nc_open('C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/barbosa0_surf_2023.05.10_2023.12.31.nc')
-
-lon <- ncvar_get(nc_data, "lon_rho")
-lat <- ncvar_get(nc_data, "lat_rho", verbose = F)
-t <- ncvar_get(nc_data, "ocean_time")
-length(t)# [1] 5665
-
-
-# calculate duration to check the time of the simulation dataset
-stdate<- ymd("2023-05-10")
-
-difftime(ymd_h("2024-01-01 01"), ymd_h("2023-05-10 00"), units = "hours")# Time difference of 5665 hours
-
-start <- as.POSIXct("2023-05-10")
-interval <- 60
-end <- start + as.difftime(length(t), units="hours")
-
-# Read in the data from the NO3 variable and verify the dimensions of the array.
-no3.array23 <- ncvar_get(nc_data, "NO3") # store the data in a 3-dimensional array
-dim(no3.array23) 
-
-fillvalue <- ncatt_get(nc_data, "NO3", "_FillValue")
-fillvalue
-
-
-# All done reading in the data. We can close the netCDF file.
-nc_close(nc_data)
-
-# First, a little housekeeping. Let’s replace all those pesky fill values with the R-standard ‘NA’.
-no3.array23[no3.array23 == fillvalue$value] <- NA
-
-
-
-
-
-
-################################################################################
-### Separate in months to calculate monthly metrics ============================
-library(chron)
-library(mondate)
-start <- "2023-05-10 00:00:00"
-end <- "2024-01-31 01:00:00"
-# start.time.num <- as.numeric(as.chron(start))
-
-# 1/24 means one hour.  Change as needed.
-# hours <- as.chron(seq(start.time.num, end.time.num, 1/24))
-# as.chron(seq(from=start, by=interval*60, to=end))
-
-set.seed(1);
-R <- dim(no3.array23)[1];
-C <- dim(no3.array23)[2];
-Z <- dim(no3.array23)[3];
-N <- R*C*Z;
-
-df<- data.frame(matrix(nrow = 7, ncol = 2))
-colnames(df)<- c("month", "hours_count")
-df$month<- c(seq(6, 12, 1))
-df$day<- rep(1, 7)
-df$year<- c(rep(2023,7))
-df$start_time<- "00:00"
-df$start<- ymd_hm(paste(df$year, df$month, df$day, df$start_time))
-
-start <- as.POSIXct("2023-05-10")
-end <- as.POSIXct("2024-01-01")
-
-time_hour<- seq(from=start, by=interval*60, to=end)
-
-df$start_time <- c(which(time_hour == "2023-06-01 00:00:00 UTC"),
-                   which(time_hour == "2023-07-01 00:00:00 UTC"), which(time_hour == "2023-08-01 00:00:00 UTC"),
-                   which(time_hour == "2023-09-01 00:00:00 UTC"), which(time_hour == "2023-10-01 00:00:00 UTC"),
-                   which(time_hour == "2023-11-01 00:00:00 UTC"), which(time_hour == "2023-12-01 00:00:00 UTC"))
-
-df$end_time <- c(which(time_hour == "2023-07-01 00:00:00 UTC"), which(time_hour == "2023-08-01 00:00:00 UTC"),
-                 which(time_hour == "2023-09-01 00:00:00 UTC"), which(time_hour == "2023-10-01 00:00:00 UTC"),
-                 which(time_hour == "2023-11-01 00:00:00 UTC"), which(time_hour == "2023-12-01 00:00:00 UTC"),
-                 which(time_hour == "2023-12-31 00:00:00 UTC"))
-
-df$end_date <- time_hour[df$end_time]
-
-
-csv_outputs_path<- "C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/metrics_NO3"
-
-calc_monthly_metrics2023<- function(data= no3.array, metric= "max", df= df, csv_outputs_path= csv_outputs_path){
-  
-  no3_month_1<- no3.array[,, 1:  df$end_time[1]]
-  # save this data in a raster. Note that we provide the coordinate reference system “CRS” in the standard well-known text format. For this data set, it is the common WGS84 system.
-  # We will need to transpose and flip to orient the data correctly. The best way to figure this out is through trial and error, but remember that most netCDF files record spatial data from the bottom left corner.
-  no3_month_m1<- flip(raster(t(as.matrix(apply(no3_month_1,c(1,2),metric))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-  names(no3_month_m1)<- paste("NO3", df$month[1], df$year[1], metric, sep="_")
-  # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-  # colnames(csv_file)<- c("NO3", "lat", "lon")
-  # csv_file$NO3<- c(as.matrix(apply(no3_month_1,c(1,2),metric)))
-  # # csv_file[is.na(csv_file$NO3), "NO3"]<- 9999
-  # csv_file$lon<- c(lon)
-  # csv_file$lat<- c(lat)
-  # csv_file$NO3<- as.numeric(csv_file$NO3)
-  # csv_file<- csv_file%>%
-  #   filter(!is.na(NO3))
-  # name<- paste(names(no3_month_m1), ".csv", sep="")
-  # write.csv(csv_file, paste(csv_outputs_path, name, sep="/"))
-  
-  
-  no3_month_2<- no3.array[,, 2:  df$end_time[2]]
-  no3_month_m2<- flip(raster(t(as.matrix(apply(no3_month_2,c(1,2),metric))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-  names(no3_month_m2)<- paste("NO3", df$month[2], df$year[1], metric, sep="_")
-  # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-  # colnames(csv_file)<- c("NO3", "lat", "lon")
-  # csv_file$NO3<- c(as.matrix(apply(no3_month_2,c(1,2),metric)))
-  # # csv_file[is.na(csv_file$NO3), "NO3"]<- 9999
-  # csv_file$lon<- c(lon)
-  # csv_file$lat<- c(lat)
-  # csv_file$NO3<- as.numeric(csv_file$NO3)
-  # csv_file<- csv_file%>%
-  #   filter(!is.na(NO3))
-  # name<- paste(names(no3_month_m2), ".csv", sep="")
-  # write.csv(csv_file, paste(csv_outputs_path, name, sep="/"))
-  
-  no3_metrics<- stack(no3_month_m1, no3_month_m2)
-  
-  if (length(df[,1]) >= 3){
-    
-    for (m in 3:7) {
-      df_m<- df[m,]
-      start<- df_m$start
-      # end.time.num <- as.numeric(as.chron(paste(mondate(start)+1, start)))# +1 means one month. 
-      end.time <- mondate(start)+1# +1 means one month. 
-      n_hours<- length(seq(from=start, by=interval*60, to= as.POSIXct(end.time)-2))
-      
-      
-      no3_month<- no3.array[,, df_m$start_time:  df_m$end_time]
-      no3_month_m<- flip(raster(t(as.matrix(apply(no3_month,c(1,2),paste(metric)))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-      names(no3_month_m)<- paste("NO3", df$month[m], df$year[m], metric, sep="_")
-      no3_metrics<- stack(no3_metrics, no3_month_m)
-      
-      # # no3<- as.data.frame(c(apply(no3_month,c(1,2),paste(metric))))
-      # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-      # colnames(csv_file)<- c("NO3", "lat", "lon")
-      # csv_file$NO3<- c(apply(no3_month, c(1, 2), paste(metric)))
-      # csv_file$lon<- c(lon)
-      # csv_file$lat<- c(lat)
-      # 
-      # csv_file$NO3<- as.numeric(csv_file$NO3)
-      # csv_file<- csv_file%>%
-      #   filter(!is.na(NO3))
-      # name<- paste(names(no3_month_m), ".csv", sep="")
-      # write.csv(csv_file, paste(csv_outputs_path, name, sep="/"))
-    }
-  }
-  
-  return(no3_metrics)
-}
-
-
-
-max_metrics23<- calc_monthly_metrics2023(data= no3.array23, metric= "max", df= df)
-min_metrics23<- calc_monthly_metrics2023(data= no3.array23, metric= "min", df= df)
-mean_metrics23<- calc_monthly_metrics2023(data= no3.array23, metric= "mean", df= df)
-sd_metrics23<- calc_monthly_metrics2023(data= no3.array23, metric= "sd", df= df)
-
-par(mfrow=c(3,4))
-plot(stack(max_metrics[[13:16]],max_metrics23))#
-plot(stack(min_metrics[[13:16]], min_metrics23))
-plot(stack(mean_metrics[[13:16]], mean_metrics23))
-plot(stack(sd_metrics[[13:16]], sd_metrics23))#NO3_sd_2022
-
-plot(max_metrics23)#NO3_max_JuneDec2023
-plot(min_metrics23)
-plot(mean_metrics23)
-plot(sd_metrics23)
-
-
-################################################################################
-### Separate in seasons and calculate seasonal metrics =========================
-
-"metrics_NO3_csv_month"
-
-df<- data.frame(matrix(nrow = 2, ncol = 1))
-df$month<- c(seq(1, 2, 1))
-df$day<- rep(1, 2)
-df$year<- c(rep(2023,2))
-df$start_time<- "00:00"
-df$start<- ymd_hm(paste(df$year, df$month, df$day, df$start_time))
-
-start <- as.POSIXct("2023-05-10")
-end <- as.POSIXct("2024-01-01")
-
-time_hour<- seq(from=start, by=interval*60, to=end)
-
-df$start_time <- c(which(time_hour == "2023-07-01 00:00:00 UTC"), which(time_hour == "2023-10-01 00:00:00 UTC"))
-df$end_time <- c(which(time_hour == "2023-09-01 00:00:00 UTC"), which(time_hour == "2023-12-31 00:00:00 UTC"))
-
-df$end_date <- time_hour[df$end_time]
-df$start_date <- time_hour[df$start_time]
-df$month<- c("summer", "fall")
-
-df.season<- df
-
-
-csv_outputs_path<- "C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready"
-
-max_metrics23wintfall<- calc_monthly_metrics2023(data= no3.array, metric= "max", df= df, csv_outputs_path= paste(csv_outputs_path, "metrics_NO3_csv_seasons", sep="/"))
-min_metrics23wintfall<- calc_monthly_metrics2023(data= no3.array, metric= "min", df= df, csv_outputs_path= paste(csv_outputs_path, "metrics_NO3_csv_seasons", sep="/"))
-mean_metrics23wintfall<- calc_monthly_metrics2023(data= no3.array, metric= "mean", df= df, csv_outputs_path= paste(csv_outputs_path, "metrics_NO3_csv_seasons", sep="/"))
-sd_metrics23wintfall<- calc_monthly_metrics2023(data= no3.array, metric= "sd", df= df, csv_outputs_path= paste(csv_outputs_path, "metrics_NO3_csv_seasons", sep="/"))
-
-
-
-##############################################################################
-### Winter and Spring Seasonal metrics from 2023 #############################
-nc_data <- nc_open('C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/barbosa0_surf_2022.01.01_2023.05.10.nc')
-lon <- ncvar_get(nc_data, "lon_rho")
-lat <- ncvar_get(nc_data, "lat_rho", verbose = F)
-t <- ncvar_get(nc_data, "ocean_time")
-
-# Read in the data from the NO3 variable and verify the dimensions of the array.
-no3.array2022 <- ncvar_get(nc_data, "NO3") # store the data in a 3-dimensional array
-
-fillvalue <- ncatt_get(nc_data, "NO3", "_FillValue")
-fillvalue
-
-# All done reading in the data. We can close the netCDF file.
-nc_close(nc_data)
-
-# First, a little housekeeping. Let’s replace all those pesky fill values with the R-standard ‘NA’.
-no3.array2022[no3.array2022 == fillvalue$value] <- NA
-
-### 2023
-nc_data <- nc_open('C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/barbosa0_surf_2023.05.10_2023.12.31.nc')
-# lon <- ncvar_get(nc_data, "lon_rho")
-# lat <- ncvar_get(nc_data, "lat_rho", verbose = F)
-t <- ncvar_get(nc_data, "ocean_time")
-
-# Read in the data from the NO3 variable and verify the dimensions of the array.
-no3.array2023 <- ncvar_get(nc_data, "NO3") # store the data in a 3-dimensional array
-fillvalue <- ncatt_get(nc_data, "NO3", "_FillValue")
-fillvalue
-
-# All done reading in the data. We can close the netCDF file.
-nc_close(nc_data)
-
-# First, a little housekeeping. Let’s replace all those pesky fill values with the R-standard ‘NA’.
-no3.array2023[no3.array2023 == fillvalue$value] <- NA
-
-
-# Df 
-df<- data.frame(matrix(nrow = 2, ncol = 1))
-df$month<- c(seq(1, 2, 1))
-df$day<- rep(1, 2)
-df$year<- c(rep(2023,2))
-df$start_time<- "00:00"
-df$start<- ymd_hm(paste(df$year, df$month, df$day, df$start_time))
-
-time_hour22<- seq(from=as.POSIXct("2022-01-01"), by=interval*60, to= as.POSIXct("2023-06-01"))
-time_hour23<- seq(from=as.POSIXct("2023-05-10"), by=interval*60, to= as.POSIXct("2023-12-31"))#
-
-df$start_time <- c(which(time_hour22 == "2023-01-01 00:00:00 UTC"))
-df$end_time <- c(which(time_hour22 == "2023-04-01 00:00:00 UTC"))
-
-
-
-
-calc_metrics_csv<- function(data= no3.array, metric= "max", csv_outputs_path= csv_outputs_path, season_name= "NO3_winter2023"){
-  no3_array= data
-  no3_array1<- flip(raster(t(as.matrix(apply(data,c(1,2),metric))), xmn=min(lon), xmx=max(lon), ymn=min(lat), ymx=max(lat), crs=CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs+ towgs84=0,0,0")), direction='y')
-  names(no3_array1)<- paste(season_name, metric, sep="_")
-  # csv_file<- as.data.frame(matrix(ncol=3, nrow= length(lat)))
-  # colnames(csv_file)<- c("NO3", "lat", "lon")
-  # csv_file$NO3<- c(as.matrix(apply(data,c(1,2),metric)))
-  # csv_file$lon<- c(lon)
-  # csv_file$lat<- c(lat)
-  # csv_file$NO3<- as.numeric(csv_file$NO3)
-  # csv_file<- csv_file%>%
-  #   filter(!is.na(NO3))
-  # name<- paste(names(no3_array1), ".csv", sep="")
-  # write.csv(csv_file, paste(csv_outputs_path, "metrics_NO3_csv_seasons", name, sep="/"))
-  return(no3_array1)
-  # return(csv_file)
-}
-
-### spring 2023 
-no3_spring1<- no3.array2022[,,1:  df$end_time[1]]
-no3_spring2<- abind::abind(no3.array2022[,, which(time_hour22 == "2023-04-01 00:00:00 UTC"):  which(time_hour22 == "2023-05-11 00:00:00 UTC")], 
-                           no3.array2023[,, which(time_hour23 == "2023-05-11 00:00:00 UTC"):  which(time_hour23 == "2023-07-01 00:00:00 UTC")])
-
-no3_spring<- abind::abind(no3_spring1, no3_spring2)
-dim(no3_spring)
-
-spring2023mean<- calc_metrics_csv(data= no3_spring, metric= "mean", csv_outputs_path= csv_outputs_path, season_name= "NO3_spring2023")
-plot(spring2023mean)
-spring2023min<- calc_metrics_csv(data= no3_spring, metric= "min", csv_outputs_path= csv_outputs_path, season_name= "NO3_spring2023")
-spring2023sd<- calc_metrics_csv(data= no3_spring, metric= "sd",  csv_outputs_path= csv_outputs_path, season_name= "NO3_spring2023")
-spring2023max<- calc_metrics_csv(data= no3_spring, metric= "max", csv_outputs_path= csv_outputs_path, season_name= "NO3_spring2023")
-
-
-### Winter 2023 
-no3_winter<- no3.array2022[,, which(time_hour22 == "2023-01-01 00:00:00 UTC"):  which(time_hour22 == "2023-04-01 00:00:00 UTC")]
-dim(no3_winter)[3]/24/3
-
-winter2023mean<- calc_metrics_csv(data= no3_winter, metric= "mean", csv_outputs_path= csv_outputs_path, season_name= "NO3_winter2023")
-winter2023min<- calc_metrics_csv(data= no3_winter, metric= "min", csv_outputs_path= csv_outputs_path, season_name= "NO3_winter2023")
-winter2023sd<- calc_metrics_csv(data= no3_winter, metric= "sd", csv_outputs_path= csv_outputs_path, season_name= "NO3_winter2023")
-winter2023max<- calc_metrics_csv(data= no3_winter, metric= "max", csv_outputs_path= csv_outputs_path, season_name= "NO3_winter2023")
-
-
-
-
-
-### Output plots       =========================================================
-output_path<- "C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/plots_metrics_NO3"
-
-par(mfrow=c(2,2))
-
-# png(paste(output_path, "sd_surfaceNO3.png", sep="/"), units= "cm", height = 20, width = 19, res = 300)
-plot_metrics(winter2023mean)
-# dev.off()
-
-# png(paste(output_path, "max_surfaceNO3.png", sep="/"), units= "cm",height = 20, width = 19, res = 300)
-plot_metrics(winter2023min)
-# dev.off()
-
-# png(paste(output_path, "min_surfaceNO3.png", sep="/"), units= "cm",height = 20, width = 19, res = 300)
-plot_metrics(winter2023sd)
-# dev.off()
-
-# png(paste(output_path, "mean_surfaceNO3.png", sep="/"), units= "cm", height = 20, width = 19, res = 300)
-plot_metrics(winter2023max)
-# dev.off()
-
-
-par(mfrow=c(4,4))
-
-
-plot_metrics(winter2023mean)
-plot_metrics(winter2023min)
-plot_metrics(winter2023max)
-plot_metrics(winter2023sd)
-
-plot_metrics(spring2023mean)
-plot_metrics(spring2023min)
-plot_metrics(spring2023max)
-plot_metrics(spring2023sd)
-
-plot_metrics(mean_metrics23wintfall[[1]])
-plot_metrics(min_metrics23wintfall[[1]])
-plot_metrics(max_metrics23wintfall[[1]])
-plot_metrics(sd_metrics23wintfall[[1]])
-
-plot_metrics(mean_metrics23wintfall[[2]])
-plot_metrics(min_metrics23wintfall[[2]])
-plot_metrics(max_metrics23wintfall[[2]])
-plot_metrics(sd_metrics23wintfall[[2]])
-
-
-
-# > save.image("C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/NO3_metrics_prep.RData")

@@ -1,7 +1,7 @@
 ##==================================================================
 ###     Species Distribution models    SDMs                     ################
 ###                                                             ################
-### 1.2.4- Derive terrain features from bathymetry (20m res.)   ################
+### 1.5- Derive terrain features from bathymetry (20m res.)   ################
 ### Author: Romina Barbosa                                      ################
 ### Date last edition: 5-August2025                             ################
 ###==================================================================
@@ -12,10 +12,10 @@ library(raster)
 library(RSAGA)
 library(terra)
 
-my_path_bathy<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres"
+# my_path_bathy<- "/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres"
 setwd(my_path_bathy)  
 dir()
-output_dir<- "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables"
+# output_dir<- "/SDM/environmental_layers/Topographic_Variables"
 
 # Load bathymetry raster (20 m resolution)
 bathy <- rast("coastwide_20m.tif")  # Replace with your file path
@@ -140,12 +140,12 @@ terrain_stack <- stack(terrain_layers)
 names(terrain_stack) <- names(terrain_layers)
 terrain_stack<- rast(terrain_stack)
 
-terrain_stack0<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/terrain_variables.tif")
+terrain_stack0<- rast("/SDM/environmental_layers/Topographic_Variables/terrain_variables.tif")
 terrain_stack1<- c(terrain_stack, terrain_stack0)
 names(terrain_stack1)
 
 # Save updated stack
-writeRaster(terrain_stack1, "/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/terrain_variables.tif", overwrite = TRUE)
+# writeRaster(terrain_stack1, "/SDM/environmental_layers/Topographic_Variables/terrain_variables.tif", overwrite = TRUE)
 
 # Plot
 plot(terrain_stack[["northerness_11x11"]])  # Example

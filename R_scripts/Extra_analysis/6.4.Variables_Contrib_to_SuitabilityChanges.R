@@ -62,8 +62,8 @@ env_period_1<- env_period_1[[names(env_period_1)%in% vars_selected]]
 env_period_2<- env_period_2[[names(env_period_2)%in% vars_selected]]
 names(env_period_2)
 
-pred_period_1 <- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M7_weightedPres/tifs/ensemble_ave_blob_M7.tif")
-pred_period_2 <- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M7/ens_ave_postblob_M7.tif")
+pred_period_1 <- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M7_weightedPres/tifs/ensemble.tif")
+pred_period_2 <- rast("/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M7/tifs/ensemble_postblob.tif")
 
 ##=============================================================================
 # --- Stack variables and suitability for each period
@@ -71,7 +71,7 @@ stack_period_1 <- c(env_period_1, pred_period_1)
 stack_period_2 <- c(env_period_2, pred_period_2)
 
 names(stack_period_1)[dim(stack_period_1)[3]] <- "HS_period_1"
-names(stack_period_2)[dim(stack_period_1)[3]] <- "HS_period_2"
+names(stack_period_2)[dim(stack_period_2)[3]] <- "HS_period_2"
 
 # --- Create a regular grid over raster extent to perform the analysis
 spacing= 500
@@ -122,9 +122,21 @@ delta_cols <- c("x", "y", "delta_HS", paste0("d_", vars))
 delta_df <- df_join[, delta_cols]
 delta_df <- na.omit(delta_df)
 
+# ---  Exclude areas that have not changed the habitat suitability (from suitable to unsuitable or the opposite)
+# Keep only unstable areas 
+
+restoration_dir <- "/Volumes/Romina_PSF/PSF/SDM/Restoration_areas/stability_outputs_M7"
+stability_map<-  rast( paste(restoration_dir, "restoratio_potential_masked_depth.tif", sep="/"))
+
+delta_df_1<- terra::extract(stability_map, delta_df[,c(1:2)])
+
+delta_df$restoration_category<- delta_df_1$ens_average
+  
+
 # ---  Fit regression model
 # install.packages("QuantPsyc")  # only once
 library(QuantPsyc)
+delta_df
 
 lm_delta <- lm(delta_HS ~ ., data = delta_df[, -c(1,2)])  # exclude coordinates
 summary(lm_delta)

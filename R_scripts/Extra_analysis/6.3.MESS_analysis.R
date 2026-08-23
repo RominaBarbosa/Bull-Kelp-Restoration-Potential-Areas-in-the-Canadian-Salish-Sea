@@ -10,7 +10,7 @@ library(raster)
 #   outside the range of calibration data
 # ------------------------------------------------------------------------------
 # Stack predictors for each period
-model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M6_weightedPres"
+model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M7_weightedPres"
 terrain_path<- ("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables")
 output_path<- "/Volumes/Romina_PSF/PSF/SDM/MESS"
 
@@ -32,7 +32,7 @@ raster_stack_20m_t2<- c(raster_stack_20m_t2, terrain_vars)
 # Create Mask from bathymetry
 bathy20m<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
 bathy20m_mask10_40<- bathy20m
-bathy20m_mask10_40[!(bathy20m_mask10_40 >= -10 & bathy20m_mask10_40 <= 40)] <- NA # negative values are in land
+bathy20m_mask10_40[!(bathy20m_mask10_40 >= -10 & bathy20m_mask10_40 <= 30)] <- NA # negative values are in land
 
 # Mask all layers
 glm_mod_s<- readRDS(paste(model_results_path,"glm_mod_s.rds", sep="/"))
@@ -63,9 +63,9 @@ env_t2 <- raster::stack(raster_stack_20m_t2)  # projection (new period)
 # Sample calibration conditions from t1
 # (faster than using full raster if very large)
 # Load training and testing dataset 
-traintest<- read.csv(paste("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M6.csv", sep="/"))
+traintest<- read.csv(paste("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M7.csv", sep="/"))
 traintest<- traintest[,-1]
-traintest<- traintest[,c(1,2,3,17,15,4)]
+traintest<- traintest[,c("substrate",  "depth",   "bathymetry_20",  "slope_5x5", "TPI_3x3", "x",  "y", "set")]
 
 train<- traintest%>%
   filter(set=="train")
@@ -78,15 +78,22 @@ calib_points <- calib_points[ , -1]   # remove ID column
 
 start=Sys.time()
 mess_map <- dismo::mess(env_t1, calib_points)
-end=Sys.time()
+end=Sys.time() # Time difference of 1.433886 hours
 
+plot(mess_map)
+end-start
+
+# Area outside range
+out_range_P2<- mess_map
+out_range_P2[out_range_P2>= 0]<- NA
+plot(out_range_P2)
 
 start=Sys.time()
 mess_map_t2 <- dismo::mess(env_t2, calib_points)
 end=Sys.time()
 
-writeRaster(mess_map, "mess_map_2014_2019.tif")
-writeRaster(mess_map_t2, "mess_map_2020_2022.tif")
+writeRaster(mess_map, "mess_map_2014_2019_M7.tif")
+# writeRaster(mess_map_t2, "/Volumes/Romina_PSF/PSF/SDM/MESS/mess_map_2020_2022.tif")
 
 print(end-start)
 

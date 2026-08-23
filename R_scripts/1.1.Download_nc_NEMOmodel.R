@@ -36,16 +36,6 @@ library(mondate)
 
 
 ### ============================================================================
-## Example for HRDPS, SalishSeaCast, Atmospheric Forcing Fields, Hourly, v23-02
-# The available variables are:
-# precip (Precipitation Flux, kg m-2 s-1) 
-# solar (Downward Short-Wave (Solar) Radiation Flux, W m-2)
-# tair (Air Temperature at 2m, K)
-# u_wind (U-Component of Wind at 10m, m s-1)
-# v_wind (V-Component of Wind at 10m, m s-1) 
-
-
-### ============================================================================
 ### To download products from the surface atmosphere fields: # HRDPS, SalishSeaCast, Atmospheric Forcing Fields, Hourly, v23-02
 #"https://salishsea.eos.ubc.ca/erddap/griddap/ubcSSaSurfaceAtmosphereFieldsV23-02.nc?u_wind[(2025-02-20T23:00:00Z):1:(2025-02-20T23:00:00Z)][(0.0):1:(229.0)][(0.0):1:(189.0)],v_wind[(2025-02-20T23:00:00Z):1:(2025-02-20T23:00:00Z)][(0.0):1:(229.0)][(0.0):1:(189.0)]"
 # The available variables are:
@@ -161,22 +151,11 @@ download_NEMO<- function(depth= "surface", year = "2014", variable= "u_wind",
 # Increase the time to download to avoid error when the dataset is too big
 options(timeout = 500)  # Set timeout to 300 seconds
 
-## Download Temperature ====
+## Example: Download Temperature ====
 init_time= Sys.time()
 
-download_NEMO(depth= "surface", year = "2015", variable= "v_wind", output_path= "D:/PSF/modeled_variables_original/Monthly_nc",
+download_NEMO(depth= "surface", year = "2015", variable= "v_wind", output_path= "/modeled_variables_original/Monthly_nc",
               months= c("01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"))
-
-end_time= Sys.time()
-end_time - init_time
-# Time difference of 10.7525 mins
-
-
-## Download salinity ====
-init_time= Sys.time()
-
-download_NEMO(depth= "surface", year = "2020", variable= "salinity", output_path= "E:/Pacific_Salmon_Fundation/modeled_variables_original/Monthly_nc",
-              months= c("01", "02", "03", "04", "05", "06", "07", "08"))
 
 end_time= Sys.time()
 end_time - init_time

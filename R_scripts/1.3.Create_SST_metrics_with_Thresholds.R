@@ -1,7 +1,7 @@
 ###=============================================================================
 ###     NEMO model - SalishSeaCast data process                 ################
 ###                                                             ################
-### 1.2- Loop to merge monthly data into seasons                ################
+### 1.3- Loop to merge monthly data into seasons                ################
 ###    - and calculate metrics
 ### https://salishsea.eos.ubc.ca/                               ################
 ### input data acquired with: "1.1.Download_nc_NEMOmodel.R"     ################
@@ -23,24 +23,19 @@ library(mondate)
 library(abind)
 
 ## Set Paths ===================================================================
-input_path= "D:/PSF/modeled_variables_original/Monthly_nc"
-# input_path= "Y:/Romina/Montly_nc_midwater5m"
-
-# input_path= "D:/PSF/modeled_variables_original/Monthly_nc"
+input_path= "/modeled_variables_original/Monthly_nc"
 setwd(input_path)  
 
-output_path=  "D:/PSF/modeled_variables_original/seasonal_metrics_0.5m_depth"
-# output_path= "D:/PSF/modeled_variables_original/seasonal_metrics_0.5m"
+output_path=  "/modeled_variables_original/seasonal_metrics_0.5m_depth"
+path_bathy= "/modeled_variables_original"   # used bathymetry layer to extract coordinates: ubcSSnBathymetryV21-08_d0bf_13e6_3a75.csv
 
-path_bathy= "D:/PSF/modeled_variables_original"
-
-source(paste("D:/PSF/R_scripts","RFunction_merge_nemo_seasonal_data.R", sep="/"))
-source(paste("D:/PSF/R_scripts","RFunction_calculate_simple_metrics.R", sep="/"))
-source(paste("D:/PSF/R_scripts","RFunction_temperatureOverThreshold_metrics.R", sep="/"))
+source(paste("/R_scripts/functions","RFunction_merge_nemo_seasonal_data.R", sep="/"))
+source(paste("/R_scripts/functions","RFunction_calculate_simple_metrics.R", sep="/"))
+source(paste("/R_scripts/functions","RFunction_temperatureOverThreshold_metrics.R", sep="/"))
 
 
 years<- c("2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024")
-seasons<- c("spring")#, "fall", "winter")
+seasons<- c("spring", "fall", "winter", "summer")  # select seasons 
 
 for (s in 1:2) {
   require(abind)
@@ -65,12 +60,6 @@ for (s in 1:2) {
   }
   
 }
-
-
-
-
-# > save.image("C:/Users/romi_/OneDrive - University of Victoria/Kelp_postdoc/Environmental_cond/Washington_model_MacCready/NO3_metrics_prep.RData")
-# load("")
 
 
 
