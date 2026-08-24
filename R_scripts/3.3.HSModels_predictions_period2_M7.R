@@ -16,9 +16,9 @@ library(randomForest)
 library(gbm)
 
 
-source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/functions_3.1_HSModeling_analyses_&_plots.R")
+source("/R_scripts/functions/functions_3.1_HSModeling_analyses_&_plots.R")
 
-path_postBlob<- "/Volumes/Romina_PSF/PSF/SDM/SDM_predict_postBlob/M7"
+path_postBlob<- "/SDM/SDM_predict_postBlob/M7"
 setwd(path_postBlob)
 
 # Step 1 was run and now you only need to upload the inputs
@@ -26,12 +26,12 @@ setwd(path_postBlob)
 # STEP 1: Load input variables of Post Blob Period of the entire area
 # =============================================================================
 # Load raster stack of variables resampled at 20 m resoltuion
-raster_stack_20m<- terra::rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif")
+raster_stack_20m<- terra::rast("/SDM/environmental_layers/SalishSeaCast_interp_20m_resolution/SalishSeaCast_interp_20m_postblob.tif")
 names(raster_stack_20m)
 
 
 ### Load terrain variables =====================================================
-terrain_path<- ("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables")
+terrain_path<- ("/SDM/environmental_layers/Topographic_Variables")
 tif_files <- list.files(terrain_path, pattern = "\\.tif$", full.names = TRUE)
 
 # Load and stack all tif files
@@ -49,7 +49,7 @@ raster_stack_20m_all<- c(raster_stack_20m, terrain_vars)
 
 
 # Create Mask from bathymetry
-bathy20m<- rast("/Volumes/Romina_PSF/PSF/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
+bathy20m<- rast("/SDM/environmental_layers/Topographic_Variables/topographic_variables_20mres/coastwide_20m.tif")
 bathy20m_mask10_30<- bathy20m
 bathy20m_mask10_30[!(bathy20m_mask10_30 >= -10 & bathy20m_mask10_30 <= 30)] <- NA # negative values are in land
 
@@ -64,7 +64,7 @@ writeRaster(raster_stack_20m_all, "raster_stack_predict_postBlob.tif", overwrite
 
 
 ### Load models  ==============================================
-model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results/Sep2025_M7_weightedPres"
+model_results_path<- "/SDM/SDM_results/Sep2025_M7_weightedPres"
 
 glm_mod_s<- readRDS(paste(model_results_path,"glm_mod_s.rds", sep="/"))
 gam_mod_s<- readRDS(paste(model_results_path,"gam_mod_s.rds", sep="/"))
@@ -84,7 +84,6 @@ vars_selected <- unique(vars_clean)
 
 #  c( "slope_7x7", "ammonium_spring_SD", "ammonium_winter_mean","PAR_summer_mean", "temperature_summer_mean",
 # "turbidity_summer_mean","salinity_summer_SD", "nitrate_summer_mean", "ammonium_summer_mean", "ammonium_spring_mean")   
-
 
 
 ### Scale variables before predictions =========================================
@@ -207,68 +206,6 @@ writeRaster(ensemble_model_postBlob$max, "ensemble_model_max_postBlob_M7.tif")
 writeRaster(ensemble_model_postBlob$min, "ensemble_model_min_postBlob_M7.tif")
 writeRaster(ensemble_model_postBlob$sd, "ensemble_model_wSD_postBlob_M7.tif")
 
-# PCA ensemble model ===========================================================
-# Combine list of rasters into a SpatRaster
-pred_stack <- rast(pred_rasters_list)
-
-# Extract values as a matrix: rows = cells, cols = models
-pred_matrix <- values(pred_stack)
-
-# Mask NA rows (cells with NA in any model prediction)
-valid_idx <- complete.cases(pred_matrix)
-pred_matrix_valid <- pred_matrix[valid_idx, ]
-
-# PCA on valid data
-pca_res <- prcomp(pred_matrix_valid, center = TRUE, scale. = TRUE)
-pc1 <- pca_res$x[, 1]
-
-# Align PC1 with the mean prediction (or any reference model)
-mean_pred <- rowMeans(pred_matrix_valid)
-
-# If correlation is negative, flip PC1
-if (cor(pc1, mean_pred) < 0) {
-  pc1 <- -pc1
-}
-
-
-summary(pca_res)
-
-# Rescale PC1 to [0,1]
-pc1_scaled <- (pc1 - min(pc1)) / (max(pc1) - min(pc1))
-
-# Create an empty vector to hold results for all cells
-ensemble_vals <- rep(NA, nrow(pred_matrix))
-ensemble_vals[valid_idx] <- pc1_scaled
-
-# Write back to a raster
-ensemble_raster <- pred_stack[[1]]
-values(ensemble_raster) <- ensemble_vals
-plot(ensemble_raster)
-names(ensemble_raster)<- "PCA_ensemble"
-
-writeRaster(ensemble_raster, "ensemble_PCA_postblob_M7.tif")
-
-
-# ---- PC2 (variability/disagreement) ----
-pc2 <- pca_res$x[, 2]
-if (cor(pc2, mean_pred) < 0) {
-  pc2 <- -pc2
-}
-pc2_scaled <- (pc2 - min(pc2)) / (max(pc2) - min(pc2))
-
-ensemble_vals_pc2 <- rep(NA, nrow(pred_matrix))
-ensemble_vals_pc2[valid_idx] <- pc2_scaled
-
-ensemble_raster_pc2 <- pred_stack[[1]]
-values(ensemble_raster_pc2) <- ensemble_vals_pc2
-names(ensemble_raster_pc2) <- "PCA_ensemble_PC2"
-
-plot(ensemble_raster_pc2)
-writeRaster(ensemble_raster_pc2, "ensemble_PCA_disagreement_postblob_M7.tif")
-
-
-
-
 
 # ==============================================================================
 # STEP 3: Binary results & Evaluation with presence/absence data from Post blob
@@ -278,7 +215,7 @@ ensemble_raster_PCA<- rast("ensemble_PCA_postblob_M7.tif")
 ensemble_raster_ave<- rast("ens_ave_postblob_M7.tif")
 
 # Load testing points (kelp centroids for the period 2020-2022 plus absenses, 1 per cell of 500x500m)
-test_data_df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/MoraSoto_postblob/Presence_absences_kelp_2020_2022_filtered.csv")
+test_data_df<- read.csv("/SDM/Presence_absences_kelp/MoraSoto_postblob/Testing_Presence_absences_kelp_2020_2022_filtered.csv")
 test_data_sat_pts<- vect(test_data_df, geom = c("x", "y"), crs = "EPSG:3005")
 
 threshold_drop <-  0.1957
@@ -512,176 +449,3 @@ testing_table_result<- rbind(post_blob_sat_thres1, post_blob_sat_thres1_masked, 
 ## Add values of ensemble model into table of results ========
 # results_selected[5,1:6]<- list("ens", auc_val, sensitivity, specificity,tss)
 write.csv(testing_table_result, "results_PostBlob_testing_Table_M7.csv")
-
-
-
-
-
-
-# Quick code to compare probability distributions (calibration vs testing)
-# This helps see whether the model is predicting lower probabilities in the test period (shift in score distribution).
-
-library(ggplot2)
-train_df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_M7.csv")
-train_df<- train_df%>% filter(set= "train")
-train_df_pts<-  vect(train_df, geom = c("x", "y"), crs = "EPSG:3005")
-pred_vals_train <- terra::extract(ensemble_raster_ave, train_df_pts)
-
-# Convert to data.frame (kelp must be in test_points!)
-train_df$ensemble_pred <- pred_vals_train[, -1]
-train_df$ensemble_pred <- as.numeric(train_df$ensemble_pred )
-
-test_data_df<- read.csv("/Volumes/Romina_PSF/PSF/SDM/Presence_absences_kelp/MoraSoto_postblob/Presence_absences_kelp_2020_2022_filtered.csv")
-test_data_sat_pts<- vect(test_data_df, geom = c("x", "y"), crs = "EPSG:3005")
-pred_vals<- extract(ensemble_raster_ave, test_data_sat_pts)
-test_data_df$ensemble_pred<- pred_vals[,-1]
-
-
-pres <- dplyr::filter(test_data_df, kelp == 1)
-pres <- dplyr::sample_n(pres, 800)
-
-abs  <- dplyr::filter(test_data_df, kelp == 0) %>%
-  dplyr::slice_sample(n = nrow(pres))
-samp <- dplyr::bind_rows(pres, abs)
-
-train_probs <- data.frame(prob = train_df$ensemble_pred, kelp = train_df$kelp, dataset = "train")
-test_probs  <- data.frame(prob = samp$ensemble_pred, kelp = samp$kelp, dataset = "test")
-dfp <- rbind(train_probs, test_probs)
-dfp$prob<- as.numeric(dfp$prob)
-dfp$dataset<- as.factor(dfp$dataset)
-
-ggplot(dfp, aes(x = prob, fill = factor(kelp))) +
-  geom_histogram(alpha = 0.4, bins = 50, position = "identity") +
-  # geom_density(alpha = 0.4) +
-  facet_wrap(~dataset) +
-  labs(fill = "kelp")
-
-
-ggplot(dfp, aes(x = prob, y = ..density.., fill = factor(kelp))) +
-  geom_histogram(alpha = 0.4, bins = 50, position = "identity") +
-  facet_wrap(~dataset) +
-  labs(fill = "kelp")
-# If test presences are scored systematically lower than train presences, thresholds from training will underperform on test.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# # =================================================================
-# # STEP 10: Plot predictions in the entire area
-# # =================================================================
-# library(sf)
-# library(purrr)
-# library(rnaturalearth)
-# library(rnaturalearthdata)
-# library(patchwork)
-# 
-# # Get country boundaries and coastline
-# world <- ne_countries(scale = 10, returnclass = "sf")
-# coastline <- ne_coastline(scale = 10, returnclass = "sf")
-# crs_target <- "EPSG:3005"
-# crs(glm_pred_raster) <- crs_target
-# study_extent <- c(xmin = 984960, xmax = 1267240, ymin = 332520, ymax = 666640)
-# world_proj <- st_transform(world, crs(glm_pred_raster))
-# coastline_proj <- st_transform(coastline, crs(glm_pred_raster))
-# 
-# # Load coastline and land basemap (if not already loaded)
-# coastline <- ne_coastline(scale = "large", returnclass = "sf")
-# coastline <- st_transform(coastline, st_crs(glm_pred_raster))
-# land_highres <- ne_download(scale = "large", type = "land", category = "physical", returnclass = "sf")
-# land_highres <- st_transform(land_highres, st_crs(glm_pred_raster))
-# 
-# 
-# # source("/Users/romina/Documents/GitHub/PSF_kelp-HSM/R_scripts/functions/functions_3.1_HSModeling_analyses_&_plots.R")
-# 
-# glm_binary_map<- plot_raster_gg(glm_bin, title= "GLM Binary Prediction")
-# gam_binary_map<- plot_raster_gg(gam_bin, title= "GAM Binary Prediction")
-# rf_binary_map<- plot_raster_gg(rf_bin,  title= "RF Binary Prediction")
-# brt_binary_map<- plot_raster_gg(brt_bin, title= "BRT Binary Prediction")
-# 
-# cowplot::plot_grid(glm_binary_map, gam_binary_map, rf_binary_map, brt_binary_map, nrow = 2,
-#                    labels = c("A)", "B)", "C)", "D)"))
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/PredictionMap_GLM.pdf", width = 14, height = 15, dpi= 300, units="cm")
-# ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/PredictionMap_GLM.png", width = 14, height = 15, dpi= 300, units="cm")
-# 
-# 
-# 
-# 
-# # ==============================================================================
-# # STEP 12: RE-scale Ensemble Model (unsuitable vs suitability)
-# # ==============================================================================
-# ens_model_rescaled<- threshold_rescale(ens_raster= ensemble_model_rast$mean, opt_thresh = results_selected[which(results_selected$Model=="ens"),"Threshold"]$ Threshold)
-# plot(ens_model_rescaled$rescaled)
-# writeRaster(ens_model_rescaled$rescaled, "ens_model_rescaled.tif")
-# # writeRaster(ens_model_rescaled$binary, "ens_model_bin.tif")
-# 
-# 
-# 
-# # ==============================================================================
-# # STEP 13: Evaluate the effect of thrsholding 
-# # ==============================================================================
-# # thresholds to evaluate
-# thresholds <- seq(0, 1, by = 0.05)
-# 
-# # presence points (SpatVector or sf with presence-only points)
-# # assume you have: presence_points
-# 
-# # Extract predictions for each model at presence locations
-# pred_rasters_list_2 <- list(
-#   glm = glm_pred_raster,
-#   gam = gam_pred_raster,
-#   rf  = rf_pred_raster,
-#   brt = brt_pred_raster,
-#   ens = ensemble_model_rast$mean
-# )
-# 
-# ### Calculate omission error per threshold per model  
-# test_points <- vect(test, geom = c("x", "y"), crs = "EPSG:3005")
-# 
-# model_preds <- lapply(pred_rasters_list_2, function(r) {
-#   terra::extract(r, test_points)[,2]  # column 2 = values
-# })
-# 
-# results_omission <- lapply(names(model_preds), function(m) {
-#   preds <- model_preds[[m]]
-#   data.frame(
-#     Model = m,
-#     Threshold = thresholds,
-#     Omission = sapply(thresholds, function(t) mean(preds < t, na.rm = TRUE))
-#   )
-# }) %>% bind_rows()
-# 
-# # Plot
-# ggplot(results_omission, aes(x = Threshold, y = Omission, color = Model)) +
-#   geom_line(size = 1) +
-#   geom_vline(xintercept = opt_thresh$Threshold, linetype = "dashed", color = "red", size = 1) +
-#   theme_bw() +
-#   labs(x = "Threshold", y = "Omission Error",
-#        title = "Omission Error vs. Threshold for Models")
-# 
-# # ggsave("/Volumes/Romina_PSF/PSF/SDM/SDM_results/omissionError_thresholds_models.pdf", width = 12, height = 9, dpi= 300, units="cm")
-

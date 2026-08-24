@@ -142,7 +142,7 @@ compute_limiting_variable <- function(models, raster_stack, scale_params=NULL,
 
 
 ## Load models  =====
-model_results_path<- "/Volumes/Romina_PSF/PSF/SDM/SDM_results"
+model_results_path<- "/SDM/SDM_results"
 setwd(model_results_path)
 dir()
 
@@ -165,7 +165,7 @@ raster_stack_predict_scaled<- readRDS("raster_stack_predict_scaled.rds")
 vars_selected<- c( "temperature_summer_mean",  "slope_5x5" ,  "turbidity_summer_mean",
                    "ammonium_spring_SD", "PAR_summer_mean", "currentSpeed_summer_mean", "salinity_summer_SD")      
 
-train_test_dataset<- read.csv("/Volumes/Romina_PSF/PSF/SDM/SDM_results/training_testing_datasets_blob_FINAL.csv")
+train_test_dataset<- read.csv("/SDM/SDM_results/training_testing_datasets_blob_FINAL.csv")
 train_test_dataset<- (train_test_dataset[,-1])
 names(train_test_dataset)
 
@@ -221,7 +221,11 @@ for(v in var_names) {
 }
 
 
+
+
+###==================================================================================================
 ### Compute variables limiting =================================================
+###==================================================================================================
 models_types<- c("GLM", "GAM", "RF", "BRT")
 class(models[[3]])
   
@@ -251,9 +255,6 @@ for (i in 2:length(models)) {
 }
 
 end_time<- Sys.time()
-
-
-
 
 
 
